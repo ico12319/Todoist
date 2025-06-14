@@ -1,0 +1,2 @@
+ALTER TABLE user_refresh_tokens
+DROP CONSTRAINT user_id_fkey;

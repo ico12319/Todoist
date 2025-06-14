@@ -1,0 +1,6 @@
+BEGIN TRANSACTION;
+ALTER TABLE todos
+DROP COLUMN priority;
+
+DROP TYPE IF EXISTS todo_priority;
+END;
