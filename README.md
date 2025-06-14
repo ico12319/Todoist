@@ -15,7 +15,8 @@ A production-ready microservice that powers **Todoist-style** lists and todos wi
 * **Clean Architecture** – Each domain entity (`Todo`, `List`, `User`) has its own **Repository → Service → Handler** pipeline.
 * **Pluggable Decorators** – SQL decorators (pagination, filtering, sorting) & URL decorators built via factories.
 * **Middleware-First** – Cross-cutting concerns (auth, logging, tracing, validation) extracted into reusable middleware.
-* **REST Endpoints**
+
+## REST Endpoints
 
 * **GET /lists – Read all lists (Reader)**
 
@@ -39,7 +40,7 @@ A production-ready microservice that powers **Todoist-style** lists and todos wi
 
 * **GET /users/{user_id}/lists – Lists where the user collaborates (Reader)**
 
-GET /users/{user_id}/todos – Todos assigned to the user (Reader / Admin)
+* **GET /users/{user_id}/todos – Todos assigned to the user (Reader / Admin)**
 
 * **POST /lists – Create a list (Writer)**
 
@@ -53,17 +54,17 @@ GET /users/{user_id}/todos – Todos assigned to the user (Reader / Admin)
 
 * **DELETE /lists/{list_id} – Delete a list (Owner,Collaborator or Admin)**
 
-** **DELETE /todos/{todo_id} – Delete a todo (Owner of the list where todo belongs/ Admin / Collaborator)**
+* **DELETE /todos/{todo_id} – Delete a todo (Owner of the list where todo belongs/ Admin / Collaborator)**
 
-** **DELETE /users/{user_id} – Delete a user (Admin or you can delete your account)**
+* **DELETE /users/{user_id} – Delete a user (Admin or you can delete your account)**
 
-**PATCH /lists/{list_id} – Update a list (Owner / Collaborator / Admin)**
+* **PATCH /lists/{list_id} – Update a list (Owner / Collaborator / Admin)**
 
-**PATCH /todos/{todo_id} – Update a todo (Owner / Collaborator / Admin)**
+* **PATCH /todos/{todo_id} – Update a todo (Owner / Collaborator / Admin)**
 
-**POST /token/refresh – Obtain a new JWT + refresh token (Any authenticated)**
+* **POST /token/refresh – Obtain a new JWT + refresh token (Any authenticated)**
 
-**GET /github/login – OAuth2 login entry‑point (Public)**
+* **GET /github/login – OAuth2 login entry‑point (Public)**
 
 GraphQL operations mirror these REST routes (see schema.graphql) but there an additional directive that only admins can see the role of the users. If you are not an admin you will
 see null everytime you query this field.
