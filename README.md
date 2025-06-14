@@ -17,57 +17,56 @@ A production-ready microservice that powers **Todoist-style** lists and todos wi
 * **Middleware-First** – Cross-cutting concerns (auth, logging, tracing, validation) extracted into reusable middleware.
 * **REST Endpoints**
 
-GET /lists – Read all lists (Reader)
+* **GET /lists – Read all lists (Reader)**
 
-GET /todos – Read all todos (Reader)
+* **GET /todos – Read all todos (Reader)**
 
-GET /users – Read all users (Reader)
+* **GET /users – Read all users (Reader)**
 
-GET /lists/{list_id} – Info about a specific list (Reader, must belong)
+* **GET /lists/{list_id} – Info about a specific list (Reader)**
 
-GET /todos/{todo_id} – Info about a specific todo (Reader, must belong to list)
+* **GET /todos/{todo_id} – Info about a specific todo (Reader)**
 
-GET /users/{user_id} – Info about a specific user (Reader / Admin)
+* **GET /users/{user_id} – Info about a specific user (Reader)**
 
-GET /lists/{list_id}/collaborators – Collaborators in a list (Reader, must belong)
+* **GET /lists/{list_id}/collaborators – Collaborators in a list (Reader)**
 
-GET /lists/{list_id}/todos – Todos in a list (Reader, must belong)
+* **GET /lists/{list_id}/todos – Todos in a list (Reader)**
 
-GET /lists/{list_id}/owner – Owner of a list (Reader, must belong)
+* **GET /lists/{list_id}/owner – Owner of a list (Reader)**
 
-GET /todos/{todo_id}/assignee – Assignee of a todo (Reader, must belong)
+* **GET /todos/{todo_id}/assignee – Assignee of a todo (Reader)**
 
-GET /users/{user_id}/lists – Lists where the user collaborates (Reader / Admin)
+* **GET /users/{user_id}/lists – Lists where the user collaborates (Reader)**
 
 GET /users/{user_id}/todos – Todos assigned to the user (Reader / Admin)
 
-POST /lists – Create a list (Writer / Admin)
+* **POST /lists – Create a list (Writer)**
 
-POST /todos – Create a todo (Writer / Admin / Collaborator)
+* **POST /todos – Create a todo (Collaborator, Owner of the list where todo belongs or Admin)**
 
-DELETE /lists – Delete all lists (Admin)
+* **DELETE /lists – Delete all lists (Admin)**
 
-DELETE /todos – Delete all todos (Admin)
+* **DELETE /todos – Delete all todos (Admin)**
 
-DELETE /users – Delete all users (Admin)
+* **DELETE /users – Delete all users (Admin)**
 
-DELETE /lists/{list_id} – Delete a list (Owner / Admin)
+* **DELETE /lists/{list_id} – Delete a list (Owner,Collaborator or Admin)**
 
-DELETE /todos/{todo_id} – Delete a todo (Owner / Admin / Collaborator)
+** **DELETE /todos/{todo_id} – Delete a todo (Owner of the list where todo belongs/ Admin / Collaborator)**
 
-DELETE /users/{user_id} – Delete a user (Admin)
+** **DELETE /users/{user_id} – Delete a user (Admin or you can delete your account)**
 
-PATCH /lists/{list_id} – Update a list (Owner / Collaborator / Admin)
+**PATCH /lists/{list_id} – Update a list (Owner / Collaborator / Admin)**
 
-PATCH /todos/{todo_id} – Update a todo (Owner / Collaborator / Admin)
+**PATCH /todos/{todo_id} – Update a todo (Owner / Collaborator / Admin)**
 
-POST /token/refresh – Obtain a new JWT + refresh token (Any authenticated)
+**POST /token/refresh – Obtain a new JWT + refresh token (Any authenticated)**
 
-GET /github/login – OAuth2 login entry‑point (Public)
+**GET /github/login – OAuth2 login entry‑point (Public)**
 
 GraphQL operations mirror these REST routes (see schema.graphql) but there an additional directive that only admins can see the role of the users. If you are not an admin you will
 see null everytime you query this field.
-
 
 ---
 
