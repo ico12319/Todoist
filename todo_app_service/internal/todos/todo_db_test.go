@@ -1,10 +1,10 @@
 package todos
 
 import (
+	application_errors2 "Todo-List/internProject/todo_app_service/internal/application_errors"
+	entities2 "Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"database/sql"
-	application_errors2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	entities2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	sqlmock "github.com/zhashkevych/go-sqlxmock"

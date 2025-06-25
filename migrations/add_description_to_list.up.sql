@@ -1,4 +1,0 @@
-
-ALTER TABLE lists
-ADD COLUMN description VARCHAR(250) NOT NULL
-DEFAULT '';

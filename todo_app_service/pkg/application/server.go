@@ -1,14 +1,14 @@
 package application
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/tokens"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/middlewares"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/tokens"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/status_code_encoders"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"

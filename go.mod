@@ -1,4 +1,4 @@
-module github.com/I763039/Todo-List/internProject
+module Todo-List/internProject
 
 go 1.24
 

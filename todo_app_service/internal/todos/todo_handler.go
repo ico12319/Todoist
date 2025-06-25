@@ -1,17 +1,17 @@
 package todos
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	middlewares2 "Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
 	"encoding/json"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	middlewares2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/middlewares"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/status_code_encoders"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"net/http"
 )
 

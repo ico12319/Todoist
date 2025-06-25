@@ -1,10 +1,10 @@
 package status_code_encoders
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 	"net/http"
 )
 

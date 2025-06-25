@@ -1,9 +1,9 @@
 package converters
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gofrs/uuid"
 )
 

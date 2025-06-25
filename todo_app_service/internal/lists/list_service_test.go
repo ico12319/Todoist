@@ -1,11 +1,11 @@
 package lists
 
 import (
-	application_errors2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	entities2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	mocks2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/lists/mocks"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	models2 "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
+	application_errors2 "Todo-List/internProject/todo_app_service/internal/application_errors"
+	entities2 "Todo-List/internProject/todo_app_service/internal/entities"
+	mocks2 "Todo-List/internProject/todo_app_service/internal/lists/mocks"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	models2 "Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"testing"

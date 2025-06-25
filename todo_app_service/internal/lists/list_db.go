@@ -1,19 +1,19 @@
 package lists
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
 	"github.com/jmoiron/sqlx"
 )
 
 type sqlQueryRetriever interface {
-	DetermineCorrectSqlQuery(ctx context.Context) string
+	DetermineCorrectSqlQuery(context.Context) string
 }
 
 type sqlListDB struct {
@@ -28,7 +28,9 @@ func (s *sqlListDB) GetList(ctx context.Context, listId string) (*entities.List,
 	log.C(ctx).Infof("getting list with id %s from list repository", listId)
 
 	sqlQueryString := `SELECT id, name, created_at, last_updated, owner, description 
-						FROM lists where id = $1`
+FROM lists where id = $1`
+
+	log.C(ctx).Info(sqlQueryString)
 
 	var entity entities.List
 	if err := s.db.GetContext(ctx, &entity, sqlQueryString, listId); err != nil {
@@ -88,6 +90,8 @@ func (s *sqlListDB) GetLists(ctx context.Context, queryBuilder sqlQueryRetriever
 	log.C(ctx).Info("getting all lists from list repository")
 
 	sqlQueryString := queryBuilder.DetermineCorrectSqlQuery(ctx)
+
+	log.C(ctx).Info(sqlQueryString)
 
 	var entities []entities.List
 	if err := s.db.SelectContext(ctx, &entities, sqlQueryString); err != nil {

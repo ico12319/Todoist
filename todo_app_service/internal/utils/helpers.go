@@ -1,15 +1,16 @@
 package utils
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
+	config "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v5"
@@ -204,4 +205,31 @@ func DetermineCorrectJwtErrorMessage(err error) string {
 
 	return "invalid token"
 
+}
+func DetermineErrorWhenSigningJWT(err error) error {
+	if errors.Is(err, jwt.ErrInvalidKeyType) {
+		return errors.New("invalid key type passed when trying to sign JWT")
+	} else if errors.Is(err, jwt.ErrTokenInvalidClaims) {
+		return errors.New("nil claims passed when trying to sign JWT")
+	}
+
+	return nil
+}
+
+func DetermineJWTErrorWhenParsingWithClaims(ctx context.Context, err error) error {
+	if errors.Is(err, jwt.ErrTokenMalformed) {
+		config.C(ctx).Errorf("failed to parse jwt, error %s empty or malformed token", err.Error())
+		return errors.New("empty or malformed token")
+	}
+
+	if errors.Is(err, jwt.ErrSignatureInvalid) {
+		config.C(ctx).Errorf("failed to parse jwt, error %s invalid signature", err.Error())
+		return errors.New("invalid signature")
+	}
+
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		return errors.New("token expired")
+	}
+
+	return nil
 }

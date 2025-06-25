@@ -1,8 +1,8 @@
 package users
 
 import (
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"strings"
 )
 

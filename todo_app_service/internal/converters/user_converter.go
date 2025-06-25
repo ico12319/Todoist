@@ -1,10 +1,10 @@
 package converters
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gofrs/uuid"
 )
 
@@ -18,7 +18,7 @@ func (*userConverter) ConvertFromDBEntityToModel(user *entities.User) *models.Us
 	if user == nil {
 		return nil
 	}
-	
+
 	return &models.User{
 		Id:    user.Id.String(),
 		Email: user.Email,

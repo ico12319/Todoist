@@ -1,50 +1,50 @@
 package users
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 )
 
 type userRepo interface {
-	CreateUser(ctx context.Context, user *entities.User) (*entities.User, error)
-	GetUsers(ctx context.Context, retriever sqlQueryRetriever) ([]entities.User, error)
-	GetUser(ctx context.Context, userId string) (*entities.User, error)
-	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
-	UpdateUserPartially(ctx context.Context, sqlExecParams map[string]interface{}, sqlFields []string) (*entities.User, error)
-	UpdateUser(ctx context.Context, id string, user *entities.User) (*entities.User, error)
-	DeleteUser(ctx context.Context, id string) error
-	DeleteUsers(ctx context.Context) error
-	GetTodosAssignedToUser(ctx context.Context, retriever sqlQueryRetriever) ([]entities.Todo, error)
-	GetUserLists(ctx context.Context, retriever sqlQueryRetriever) ([]entities.List, error)
+	CreateUser(context.Context, *entities.User) (*entities.User, error)
+	GetUsers(context.Context, sqlQueryRetriever) ([]entities.User, error)
+	GetUser(context.Context, string) (*entities.User, error)
+	GetUserByEmail(context.Context, string) (*entities.User, error)
+	UpdateUserPartially(context.Context, map[string]interface{}, []string) (*entities.User, error)
+	UpdateUser(context.Context, string, *entities.User) (*entities.User, error)
+	DeleteUser(context.Context, string) error
+	DeleteUsers(context.Context) error
+	GetTodosAssignedToUser(context.Context, sqlQueryRetriever) ([]entities.Todo, error)
+	GetUserLists(context.Context, sqlQueryRetriever) ([]entities.List, error)
 }
 
 type userConverter interface {
-	ConvertFromDBEntityToModel(user *entities.User) *models.User
-	ConvertFromModelToEntity(user *models.User) *entities.User
-	ConvertFromUpdateModelToModel(user *handler_models.UpdateUser) *models.User
-	ConvertFromCreateHandlerModelToModel(user *handler_models.CreateUser) *models.User
-	ManyToModel(users []entities.User) []*models.User
+	ConvertFromDBEntityToModel(*entities.User) *models.User
+	ConvertFromModelToEntity(*models.User) *entities.User
+	ConvertFromUpdateModelToModel(*handler_models.UpdateUser) *models.User
+	ConvertFromCreateHandlerModelToModel(*handler_models.CreateUser) *models.User
+	ManyToModel([]entities.User) []*models.User
 }
 
 type uuidGenerator interface {
 	Generate() string
 }
 
-type sqlConcreteDecoratorQueryFactory interface {
-	CreateUserQueryDecorator(ctx context.Context, initialQuery string, userFilters *filters.UserFilters) (sql_query_decorators.SqlQueryRetriever, error)
+type sqlDecoratorFactory interface {
+	CreateSqlDecorator(context.Context, sql_query_decorators.Filters, string) (sql_query_decorators.SqlQueryRetriever, error)
 }
 
 type listConverter interface {
-	ManyToModel(lists []entities.List) []*models.List
+	ManyToModel([]entities.List) []*models.List
 }
 
 type todoConverter interface {
-	ManyToModel(todos []entities.Todo) []*models.Todo
+	ManyToModel([]entities.Todo) []*models.Todo
 }
 type service struct {
 	repo       userRepo
@@ -52,23 +52,23 @@ type service struct {
 	lConverter listConverter
 	tConverter todoConverter
 	uuidGen    uuidGenerator
-	factory    sqlConcreteDecoratorQueryFactory
+	factory    sqlDecoratorFactory
 }
 
-func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator, factory sqlConcreteDecoratorQueryFactory) *service {
+func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator, factory sqlDecoratorFactory) *service {
 	return &service{repo: repo, converter: converter, lConverter: lConverter, tConverter: tConverter, uuidGen: uuidGen, factory: factory}
 }
 
 func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) ([]*models.User, error) {
 	log.C(ctx).Info("getting users in user service")
 
-	retriever, err := s.factory.CreateUserQueryDecorator(ctx, baseUserGetQuery, uFilters)
+	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilters, baseUserGetQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get users, error when calling factory function")
 		return nil, err
 	}
 
-	entities, err := s.repo.GetUsers(ctx, retriever)
+	entities, err := s.repo.GetUsers(ctx, decorator)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get users in user service due to an error in user repository %s", err.Error())
 		return nil, err
@@ -176,13 +176,13 @@ func (s *service) GetUserListsRecords(ctx context.Context, uFilter *filters.User
 		return nil, err
 	}
 
-	retriever, err := s.factory.CreateUserQueryDecorator(ctx, baseUserGetLists, uFilter)
+	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilter, baseUserGetLists)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error when calling factory function")
 		return nil, err
 	}
 
-	listEntities, err := s.repo.GetUserLists(ctx, retriever)
+	listEntities, err := s.repo.GetUserLists(ctx, decorator)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error %s when calling user repo function", err.Error())
 		return nil, err
@@ -199,7 +199,7 @@ func (s *service) GetTodosAssignedToUser(ctx context.Context, userFilters *filte
 		return nil, err
 	}
 
-	decorator, err := s.factory.CreateUserQueryDecorator(ctx, baseUserGetTodos, userFilters)
+	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseUserGetTodos)
 	if err != nil {
 		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling factory function")
 		return nil, err

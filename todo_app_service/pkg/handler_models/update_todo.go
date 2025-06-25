@@ -1,7 +1,7 @@
 package handler_models
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"time"
 )
 

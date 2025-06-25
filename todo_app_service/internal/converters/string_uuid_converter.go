@@ -1,7 +1,7 @@
 package converters
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
+	"Todo-List/internProject/todo_app_service/internal/utils"
 	"github.com/gofrs/uuid"
 )
 

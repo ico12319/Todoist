@@ -1,17 +1,17 @@
 package oauth
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 )
 
 type githubService interface {
-	GetUserOrganizations(ctx context.Context, accessToken string) ([]*githubModels.Organization, error)
-	GetUserInfo(ctx context.Context, accessToken string) (*githubModels.UserInfo, error)
-	GetUserInfoPrivate(ctx context.Context, accessToken string) (*githubModels.UserInfo, error)
+	GetUserOrganizations(context.Context, string) ([]*githubModels.Organization, error)
+	GetUserInfo(context.Context, string) (*githubModels.UserInfo, error)
+	GetUserInfoPrivate(context.Context, string) (*githubModels.UserInfo, error)
 }
 
 type userInfoService struct {

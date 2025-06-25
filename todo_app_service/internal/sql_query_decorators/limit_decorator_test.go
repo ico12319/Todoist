@@ -1,8 +1,8 @@
 package sql_query_decorators
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/mocks"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"testing"

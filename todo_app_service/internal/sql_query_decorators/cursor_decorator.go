@@ -1,9 +1,9 @@
 package sql_query_decorators
 
 import (
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 )
 
 type cursorDecorator struct {
@@ -11,7 +11,7 @@ type cursorDecorator struct {
 	cursor string
 }
 
-func newCursorDecorator(inner SqlQueryRetriever, cursor string) SqlQueryRetriever {
+func NewCursorDecorator(inner SqlQueryRetriever, cursor string) SqlQueryRetriever {
 	return &cursorDecorator{inner: inner, cursor: cursor}
 }
 

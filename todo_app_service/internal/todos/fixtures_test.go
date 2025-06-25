@@ -1,10 +1,10 @@
 package todos
 
 import (
+	entities2 "Todo-List/internProject/todo_app_service/internal/entities"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	entities2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"net/http/httptest"

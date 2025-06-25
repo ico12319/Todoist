@@ -1,0 +1,201 @@
+scalar Time
+
+directive @hasRole on FIELD_DEFINITION
+
+enum UserRole{
+  ADMIN
+  WRITER
+  READER
+}
+
+enum TodoStatus{
+  DONE
+  IN_PROGRESS
+  OPEN
+}
+
+enum Priority{
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+type User{
+  id: ID!
+  email: String!
+  role: UserRole @hasRole
+  assigned_to(limit: Int = 100, after: ID): TodoPage!
+  participate_in(limit: Int = 100, after: ID): ListPage!
+}
+
+type Todo{
+  id: ID!
+  name: String!
+  description: String!
+  list: List!
+  status: TodoStatus!
+  created_at: Time!
+  last_updated: Time!
+  priority: Priority!
+  assigned_to: User
+  due_data: Time
+}
+
+type List{
+  id: ID!
+  name: String!
+  description: String!
+  created_at: Time!
+  last_updated: Time!
+  owner: User!
+  todos(limit: Int = 100, after: ID, criteria: TodosFilterInput): TodoPage!
+  collaborators(limit: Int = 100, after: ID): UserPage!
+}
+
+input TodosFilterInput{
+  status: TodoStatus
+  priority: Priority
+}
+
+input CreateListInput{
+  name: String!
+  description: String!
+}
+
+input CreateTodoInput{
+  name: String!
+  description: String!
+  list_id: ID!
+  priority: Priority!
+  assigned_to: ID
+  due_date: Time
+}
+
+input UpdateTodoInput{
+  name: String
+  description: String
+  status: TodoStatus
+  priority: Priority
+  assigned_to: ID
+  due_date: Time
+}
+
+input UpdateListInput{
+  name: String
+  description: String
+}
+
+type DeleteTodoPayload{
+  success: Boolean!
+  id: ID!
+  name: String
+  description: String
+  status: TodoStatus
+  created_at: Time
+  last_updated: Time
+  priority: Priority
+  due_data: Time
+}
+
+type DeleteUserPayload{
+  success: Boolean!
+  id: ID!
+  email: String
+  role: UserRole
+}
+
+type DeleteListPayload{
+  success: Boolean!
+  id: ID!
+  name: String
+  description: String
+  created_at: Time
+  last_updated: Time
+}
+
+type PageInfo{
+  startCursor: ID!
+  endCursor: ID!
+}
+
+interface Pageable{
+  page_info: PageInfo
+  total_count: Int!
+}
+
+type TodoPage implements Pageable{
+  data: [Todo!]!
+  page_info: PageInfo
+  total_count: Int!
+}
+
+type ListPage implements Pageable{
+  data: [List!]!
+  page_info: PageInfo
+  total_count: Int!
+}
+
+type UserPage implements Pageable{
+  data: [User!]!
+  page_info: PageInfo
+  total_count: Int!
+}
+
+input CollaboratorInput{
+  list_id: ID!
+  user_id: ID!
+}
+
+type CreateCollaboratorPayload{
+  list: List
+  user: User
+  success: Boolean!
+}
+
+type DeleteCollaboratorPayload{
+  list_id: ID!
+  user_id: ID!
+  success: Boolean!
+}
+
+input RefreshTokenInput{
+  refresh_token: String!
+}
+
+type Access{
+  jwt_token: String!
+  refresh_token: String!
+}
+
+type Query{
+  lists(limit: Int = 100, after: ID): ListPage!
+  list(id: ID!): List
+
+  todos(limit: Int = 100, after: ID, criteria: TodosFilterInput): TodoPage!
+  todo(id: ID!): Todo
+
+  users(limit: Int = 100, after: ID): UserPage!
+  user(id: ID!): User
+}
+
+type Mutation{
+  createList(input: CreateListInput!): List!
+  updateList(id: ID!, input: UpdateListInput!): List!
+  addListCollaborator(input: CollaboratorInput!): CreateCollaboratorPayload!
+  deleteListCollaborator(id: ID!, user_id: ID!): DeleteCollaboratorPayload!
+  deleteList(id: ID!): DeleteListPayload!
+  deleteLists: [DeleteListPayload!]!
+
+  createTodo(input: CreateTodoInput!): Todo!
+  deleteTodo(id: ID!): DeleteTodoPayload!
+  deleteTodos: [DeleteTodoPayload!]!
+  updateTodo(id: ID!, input: UpdateTodoInput!): Todo!
+  deleteTodosByListId(id: ID!): [DeleteTodoPayload!]!
+
+  deleteUser(id: ID!): DeleteUserPayload!
+  deleteUsers: [DeleteUserPayload!]!
+
+  exchangeRefreshToken(input: RefreshTokenInput!): Access!
+}

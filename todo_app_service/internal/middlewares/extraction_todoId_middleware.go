@@ -1,9 +1,9 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/utils"
 	"context"
 	"errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
 	"github.com/gorilla/mux"
 	"net/http"
 )

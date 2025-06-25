@@ -41,7 +41,6 @@ const MISSING_USER_ID = "internal error: missing user_id"
 const STATUS = "status"
 const PRIORITY = "priority"
 const LIMIT = "limit"
-const OFFSET = "offset"
 const CURSOR = "cursor"
 const LIST_ID = "list_id"
 const USER_ID = "user_id"
@@ -62,3 +61,11 @@ const READER_ORG = "Readers"
 const WRITER_ORG = "Writers"
 
 const UUID_REGEX = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+const GOROUTINES_COUNT = 2
+
+const DEFAULT_PRIORITY = 10
+
+const CURSOR_PRIORITY = 15
+
+const LIMIT_PRIORITY = 20

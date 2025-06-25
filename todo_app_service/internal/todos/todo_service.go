@@ -1,15 +1,15 @@
 package todos
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"time"
 )
 
@@ -56,8 +56,8 @@ type userConverter interface {
 	ConvertFromDBEntityToModel(user *entities.User) *models.User
 }
 
-type concreteSqlDecoratorFactory interface {
-	CreateTodoQueryDecorator(ctx context.Context, initialQuery string, todoFilters *filters.TodoFilters) (sql_query_decorators.SqlQueryRetriever, error)
+type sqlDecoratorFactory interface {
+	CreateSqlDecorator(context.Context, sql_query_decorators.Filters, string) (sql_query_decorators.SqlQueryRetriever, error)
 }
 
 type service struct {
@@ -67,11 +67,11 @@ type service struct {
 	timeGen    timeGenerator
 	tConverter todoConverter
 	uConverter userConverter
-	factory    concreteSqlDecoratorFactory
+	factory    sqlDecoratorFactory
 }
 
 func NewService(tRepo todoRepo, lService listService, uuidGen uuidGenerator, timeGen timeGenerator,
-	todoConverter todoConverter, userConverter userConverter, factory concreteSqlDecoratorFactory) *service {
+	todoConverter todoConverter, userConverter userConverter, factory sqlDecoratorFactory) *service {
 	return &service{tRepo: tRepo, lService: lService, uuidGen: uuidGen, timeGen: timeGen,
 		tConverter: todoConverter, uConverter: userConverter, factory: factory}
 }
@@ -189,13 +189,13 @@ func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*
 func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) ([]*models.Todo, error) {
 	log.C(ctx).Info("getting todos in todo service")
 
-	retriever, err := s.factory.CreateTodoQueryDecorator(ctx, baseTodoGetQuery, filters)
+	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseTodoGetQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos, error when calling factory function")
 		return nil, err
 	}
 
-	eTodos, err := s.tRepo.GetTodos(ctx, retriever)
+	eTodos, err := s.tRepo.GetTodos(ctx, decorator)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos due to an error in todo service %s", err.Error())
 		return nil, err
@@ -212,7 +212,7 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 		return nil, err
 	}
 
-	decorator, err := s.factory.CreateTodoQueryDecorator(ctx, baseTodoGetByListIdQuery, filters)
+	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseTodoGetByListIdQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when creating query decorator", listId)
 		return nil, err

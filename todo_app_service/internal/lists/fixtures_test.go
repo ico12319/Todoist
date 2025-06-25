@@ -1,10 +1,10 @@
 package lists
 
 import (
+	entities2 "Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	models2 "Todo-List/internProject/todo_app_service/pkg/models"
 	"fmt"
-	entities2 "github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	models2 "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gofrs/uuid"
 	"time"
 )

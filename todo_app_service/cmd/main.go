@@ -1,19 +1,20 @@
 package main
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/converters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/generators"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/lists"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/tokens"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/tokens/refresh"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/status_code_encoders"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/todos"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/users"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/validators"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/application"
-	config "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/internal/converters"
+	"Todo-List/internProject/todo_app_service/internal/generators"
+	"Todo-List/internProject/todo_app_service/internal/lists"
+	"Todo-List/internProject/todo_app_service/internal/oauth"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
+	_ "Todo-List/internProject/todo_app_service/internal/sql_query_decorators/sql_decorators_creators"
+	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/internal/todos"
+	"Todo-List/internProject/todo_app_service/internal/users"
+	"Todo-List/internProject/todo_app_service/internal/validators"
+	"Todo-List/internProject/todo_app_service/pkg/application"
+	config "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/tokens"
+	"Todo-List/internProject/todo_app_service/pkg/tokens/refresh"
 	_ "github.com/lib/pq"
 	"net/http"
 )
@@ -35,12 +36,11 @@ func main() {
 	uDBConverter := converters.NewUserConverter()
 	listConverter := converters.NewListConverter()
 
-	commonFactory := sql_query_decorators.NewCommonFactory()
-	concreteDecoratorFactory := sql_query_decorators.NewConcreteQueryDecoratorFactory(commonFactory)
+	decoratorFactory := sql_query_decorators.GetDecoratorFactoryInstance()
 
-	uService := users.NewService(uRepo, uDBConverter, listConverter, todoConverter, uuidGen, concreteDecoratorFactory)
-	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uService, uDBConverter, concreteDecoratorFactory)
-	tService := todos.NewService(tRepo, lService, uuidGen, timeGen, todoConverter, uDBConverter, concreteDecoratorFactory)
+	uService := users.NewService(uRepo, uDBConverter, listConverter, todoConverter, uuidGen, decoratorFactory)
+	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uService, uDBConverter, decoratorFactory)
+	tService := todos.NewService(tRepo, lService, uuidGen, timeGen, todoConverter, uDBConverter, decoratorFactory)
 
 	fValidator := validators.GetInstance()
 	statusCodeFactory := status_code_encoders.NewStatusCodeEncoderFactory()
@@ -49,18 +49,21 @@ func main() {
 	uHandler := users.NewHandler(uService, fValidator, statusCodeFactory)
 	gitHubService := oauth.NewService(client)
 
+	jwtGetter := tokens.NewJwtGetter()
+
 	userInfoService := oauth.NewUserInfoService(gitHubService)
 	stateGenerator := generators.NewStateGenerator()
-	jwtCreator := tokens.NewJwtService(uService, timeGen)
+	jwtCreator := tokens.NewJwtService(uService, timeGen, jwtGetter)
 
-	refreshBuilder := refresh.NewRefreshTokenBuilder(timeGen)
+	refreshBuilder := refresh.NewRefreshTokenBuilder(timeGen, jwtGetter)
 	refreshRepo := refresh.NewSqlRefreshDB(db)
 	refreshConverter := converters.NewRefreshConverter()
-	refreshService := refresh.NewService(refreshRepo, uService, refreshConverter, uDBConverter, refreshBuilder)
+	refreshService := refresh.NewService(refreshRepo, uService, refreshConverter, uDBConverter)
 	oauthService := oauth.NewOauthService(userInfoService, refreshService, stateGenerator, refreshBuilder, jwtCreator, configManagerInstance)
 	oauthHandler := oauth.NewHandler(oauthService)
 
-	jwtParser := tokens.NewJwtParseService()
+	jwtParserHelper := tokens.NewJwtParser()
+	jwtParser := tokens.NewJwtParseService(jwtParserHelper)
 
 	restServer := application.NewServer(lHandler, tHandler, uHandler, oauthHandler, lService, uService, tService, uuidGen, jwtParser, statusCodeFactory)
 	restServer.Start(configManagerInstance.RestConfig.Port)

@@ -1,40 +1,40 @@
 package lists
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	"Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
 	"encoding/json"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/middlewares"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/status_code_encoders"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"net/http"
 )
 
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type listService interface {
-	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetListsRecords(ctx context.Context, lFilters *filters.ListFilters) ([]*models.List, error)
-	GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error)
-	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
-	DeleteListRecord(ctx context.Context, listId string) error
-	DeleteLists(ctx context.Context) error
-	CreateListRecord(ctx context.Context, list *handler_models.CreateList, owner string) (*models.List, error)
-	UpdateListPartiallyRecord(ctx context.Context, listId string, list *handler_models.UpdateList) (*models.List, error)
-	AddCollaborator(ctx context.Context, listId string, userId string) (*models.User, error)
-	DeleteCollaborator(ctx context.Context, listId string, userId string) error
+	GetListRecord(context.Context, string) (*models.List, error)
+	GetListsRecords(context.Context, *filters.ListFilters) ([]*models.List, error)
+	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
+	GetListOwnerRecord(context.Context, string) (*models.User, error)
+	DeleteListRecord(context.Context, string) error
+	DeleteLists(context.Context) error
+	CreateListRecord(context.Context, *handler_models.CreateList, string) (*models.List, error)
+	UpdateListPartiallyRecord(context.Context, string, *handler_models.UpdateList) (*models.List, error)
+	AddCollaborator(context.Context, string, string) (*models.User, error)
+	DeleteCollaborator(context.Context, string, string) error
 }
 
 type fieldValidator interface {
-	Struct(st interface{}) error
+	Struct(interface{}) error
 }
 
 type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(ctx context.Context, w http.ResponseWriter, err error) status_code_encoders.StatusCodeEncoder
+	CreateStatusCodeEncoder(context.Context, http.ResponseWriter, error) status_code_encoders.StatusCodeEncoder
 }
 
 type handler struct {

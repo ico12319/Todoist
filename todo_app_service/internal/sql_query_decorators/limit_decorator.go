@@ -1,9 +1,9 @@
 package sql_query_decorators
 
 import (
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 )
 
 type limitDecorator struct {
@@ -11,7 +11,7 @@ type limitDecorator struct {
 	limit     int
 }
 
-func newLimitDecorator(retriever SqlQueryRetriever, limit int) SqlQueryRetriever {
+func NewLimitDecorator(retriever SqlQueryRetriever, limit int) SqlQueryRetriever {
 	return &limitDecorator{retriever: retriever, limit: limit}
 }
 

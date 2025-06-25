@@ -1,9 +1,9 @@
 package sql_query_decorators
 
 import (
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 )
 
 // concrete decorator!
@@ -13,7 +13,7 @@ type allTodosByCriteriaDecorator struct {
 	conditionValue string
 }
 
-func newCriteriaDecorator(retriever SqlQueryRetriever, condition string, conditionValue string) SqlQueryRetriever {
+func NewCriteriaDecorator(retriever SqlQueryRetriever, condition string, conditionValue string) SqlQueryRetriever {
 	return &allTodosByCriteriaDecorator{retriever: retriever, condition: condition, conditionValue: conditionValue}
 }
 

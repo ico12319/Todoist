@@ -1,9 +1,9 @@
 package sql_query_decorators
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

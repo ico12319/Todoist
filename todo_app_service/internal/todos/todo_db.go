@@ -1,15 +1,15 @@
 package todos
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/application_errors"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/entities"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
 	"github.com/jmoiron/sqlx"
 )
 

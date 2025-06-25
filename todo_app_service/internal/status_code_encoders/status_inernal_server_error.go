@@ -1,9 +1,9 @@
 package status_code_encoders
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 	"net/http"
 )
 

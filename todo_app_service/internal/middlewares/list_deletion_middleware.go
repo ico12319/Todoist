@@ -1,9 +1,9 @@
 package middlewares
 
 import (
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"net/http"
 )
 

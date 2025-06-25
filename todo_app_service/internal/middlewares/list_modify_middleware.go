@@ -1,12 +1,12 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gorilla/mux"
 	"net/http"
 )
@@ -19,8 +19,8 @@ type userRoleKey struct {
 var UserRoleKey = userRoleKey{}
 
 type ListService interface {
-	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error)
+	GetListRecord(context.Context, string) (*models.List, error)
+	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
 }
 
 type listModifyMiddleware struct {

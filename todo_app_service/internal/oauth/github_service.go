@@ -1,16 +1,16 @@
 package oauth
 
 import (
+	"Todo-List/internProject/graphQL_service/graph/utils"
+	"Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/graph/utils"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 	"net/http"
 )
 
 type httpClient interface {
-	Do(req *http.Request) (*http.Response, error)
+	Do(*http.Request) (*http.Response, error)
 }
 
 type service struct {

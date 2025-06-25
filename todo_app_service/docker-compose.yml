@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - ${DB_PORT}:${DB_PORT}
+
+  migrations:
+    image: migrate/migrate:v4.18.3
+    volumes:
+      - ../migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: [ "migrate",
+                  "-path", "/migrations",
+                  "-database", "postgres://${DB_USER}:${DB_PASS}@db:${DB_PORT}/${DB_NAME}?sslmode=disable",
+                  "up" ]
+    restart: on-failure
+
+  rest_api:
+    image: todo_rest_api:latest
+    ports:
+      - ${REST_PORT}:${REST_PORT}
+    depends_on:
+      - migrations
+
+volumes:
+  db_data:

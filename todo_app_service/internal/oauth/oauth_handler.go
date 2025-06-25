@@ -1,21 +1,22 @@
 package oauth
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	config "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
 	"encoding/json"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	config "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"net/http"
+	"time"
 )
 
 type oauthServ interface {
-	LoginUrl(ctx context.Context) (string, string, error)
-	ExchangeCodeForToken(ctx context.Context, authCode string) (string, error)
-	GetTokens(ctx context.Context, accessToken string) (*models.CallbackResponse, error)
-	GetRenewedTokens(ctx context.Context, refresh *handler_models.Refresh) (*models.CallbackResponse, error)
+	LoginUrl(context.Context) (string, string, error)
+	ExchangeCodeForToken(context.Context, string) (string, error)
+	GetTokens(context.Context, string) (*models.CallbackResponse, error)
+	GetRenewedTokens(context.Context, *handler_models.Refresh) (*models.CallbackResponse, error)
 }
 
 type handler struct {
@@ -50,6 +51,9 @@ func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	authCode := r.URL.Query().Get("code")
 
 	accessToken, err := h.service.ExchangeCodeForToken(ctx, authCode)

@@ -1,33 +1,39 @@
 package oauth
 
 import (
+	config "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
-	config "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/handler_models"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 )
+
+type ChannelResult[T any] struct {
+	Result T
+	Err    error
+}
 
 type stateGenerator interface {
 	GenerateState() (string, error)
 }
 
 type jwtBuilder interface {
-	GenerateJWT(ctx context.Context, email string, role string) (string, error)
+	GenerateJWT(context.Context, string, string) (string, error)
 }
 
 type refreshTokenBuilder interface {
-	GenerateRefreshToken(ctx context.Context) (string, error)
+	GenerateRefreshToken(context.Context) (string, error)
 }
 
 type userInfoRetriever interface {
-	DetermineUserGitHubEmail(ctx context.Context, accessToken string) (string, error)
-	GetUserAppRole(ctx context.Context, accessToken string) (string, error)
+	DetermineUserGitHubEmail(context.Context, string) (string, error)
+	GetUserAppRole(context.Context, string) (string, error)
 }
 
 type refreshTokenService interface {
-	CreateRefreshToken(ctx context.Context, email string, refreshToken string) (*models.Refresh, error)
-	UpdateRefreshToken(ctx context.Context, refreshToken string, userId string) (*models.Refresh, error)
-	GetTokenOwner(ctx context.Context, refreshToken string) (*models.User, error)
+	CreateRefreshToken(context.Context, string, string) (*models.Refresh, error)
+	UpdateRefreshToken(context.Context, string, string) (*models.Refresh, error)
+	GetTokenOwner(context.Context, string) (*models.User, error)
 }
 type oauthService struct {
 	refreshService refreshTokenService
@@ -69,19 +75,44 @@ func (o *oauthService) ExchangeCodeForToken(ctx context.Context, authCode string
 func (o *oauthService) GetTokens(ctx context.Context, accessToken string) (*models.CallbackResponse, error) {
 	config.C(ctx).Info("getting jwt token in oauth service")
 
-	userEmail, err := o.uInfoService.DetermineUserGitHubEmail(ctx, accessToken)
-	if err != nil {
-		config.C(ctx).Errorf("failed to get jwt, error %s when trying to determine user's github email", err.Error())
-		return nil, err
+	emailChan := make(chan ChannelResult[string], 1)
+	roleChan := make(chan ChannelResult[string], 1)
+
+	go func() {
+		userEmail, err := o.uInfoService.DetermineUserGitHubEmail(ctx, accessToken)
+		emailChan <- ChannelResult[string]{userEmail, err}
+	}()
+
+	go func() {
+		userRole, err := o.uInfoService.GetUserAppRole(ctx, accessToken)
+		roleChan <- ChannelResult[string]{userRole, err}
+	}()
+
+	var email string
+	var role string
+
+	for i := 0; i < constants.GOROUTINES_COUNT; i++ {
+		select {
+		case chRes := <-emailChan:
+			if chRes.Err != nil {
+				config.C(ctx).Errorf("failed to get jwt, error %s when trying to determine user's github email", chRes.Err.Error())
+				return nil, chRes.Err
+			}
+			email = chRes.Result
+
+		case chRes := <-roleChan:
+			if chRes.Err != nil {
+				config.C(ctx).Errorf("failed to get jwt, error %s when trying to get user's app role", chRes.Err.Error())
+				return nil, chRes.Err
+			}
+			role = chRes.Result
+
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 
-	userRole, err := o.uInfoService.GetUserAppRole(ctx, accessToken)
-	if err != nil {
-		config.C(ctx).Errorf("failed to get jwt, error %s when trying to get user's app role", err.Error())
-		return nil, err
-	}
-
-	jwtToken, err := o.jwtBuilder.GenerateJWT(ctx, userEmail, userRole)
+	jwtToken, err := o.jwtBuilder.GenerateJWT(ctx, email, role)
 	if err != nil {
 		config.C(ctx).Errorf("failed to create jwt token, error %s when generating...", err.Error())
 		return nil, err
@@ -93,7 +124,7 @@ func (o *oauthService) GetTokens(ctx context.Context, accessToken string) (*mode
 		return nil, err
 	}
 
-	if _, err = o.refreshService.CreateRefreshToken(ctx, userEmail, refreshToken); err != nil {
+	if _, err = o.refreshService.CreateRefreshToken(ctx, email, refreshToken); err != nil {
 		config.C(ctx).Errorf("failed to create refresh token, error %s when generating...", err.Error())
 		return nil, err
 	}

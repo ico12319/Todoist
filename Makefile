@@ -2,7 +2,7 @@ COVERAGE_FILE := coverage.out
 TEST_PKGS := ./...
 
 MIGRATE         := migrate
-MIGRATION_DIR   := internal/migrations
+MIGRATION_DIR   := internProject/migrations
 
 
 .PHONY: test coverage create-migration clean

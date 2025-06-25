@@ -1,15 +1,15 @@
 package sql_query_decorators
 
 import (
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
 )
 
 // the idea of this abstract component is to dynamically build sql query in order to extract todos!
 
 //go:generate mockery --name=SqlQueryRetriever --output=./mocks --outpkg=mocks --filename=sql_retriever.go --with-expecter=true
 type SqlQueryRetriever interface {
-	DetermineCorrectSqlQuery(ctx context.Context) string
+	DetermineCorrectSqlQuery(context.Context) string
 }
 
 // concrete component!

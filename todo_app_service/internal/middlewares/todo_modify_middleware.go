@@ -1,25 +1,25 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
+	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/status_code_encoders"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/constants"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gorilla/mux"
 	"net/http"
 )
 
 type TodoService interface {
-	GetTodoRecord(ctx context.Context, todoId string) (*models.Todo, error)
-	GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*models.User, error)
+	GetTodoRecord(context.Context, string) (*models.Todo, error)
+	GetTodoAssigneeToRecord(context.Context, string) (*models.User, error)
 }
 
 type listService interface {
-	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
-	GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error)
+	GetListOwnerRecord(context.Context, string) (*models.User, error)
+	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
 }
 
 type statusCodeEncoderFactory interface {

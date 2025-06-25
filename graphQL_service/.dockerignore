@@ -1,0 +1,7 @@
+*_test.go
+
+[Mm]akefile*
+
+.git
+*.log
+coverage.*

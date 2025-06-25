@@ -1,34 +1,64 @@
 package sql_query_decorators
 
 import (
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
-	"fmt"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"strconv"
+	"sort"
+	"sync"
 )
 
-type commonDecoratorFactory struct{}
-
-func NewCommonFactory() *commonDecoratorFactory {
-	return &commonDecoratorFactory{}
+type Filters interface {
+	GetFilters() map[string]string
 }
 
-func (c *commonDecoratorFactory) CreateCommonDecorator(ctx context.Context, inner SqlQueryRetriever, baseFilters *filters.BaseFilters) (SqlQueryRetriever, error) {
+type SqlDecoratorCreator interface {
+	Create(context.Context, SqlQueryRetriever, Filters) (SqlQueryRetriever, error)
+	Priority() int
+}
+type decoratorFactory struct {
+	creators []SqlDecoratorCreator
+}
+
+var (
+	once     sync.Once
+	instance *decoratorFactory
+)
+
+func GetDecoratorFactoryInstance() *decoratorFactory {
+	once.Do(func() {
+		instance = &decoratorFactory{make([]SqlDecoratorCreator, 0)}
+	})
+
+	return instance
+}
+
+func (c *decoratorFactory) RegisterCreator(creator SqlDecoratorCreator) {
+	c.creators = append(c.creators, creator)
+}
+
+func (c *decoratorFactory) CreateSqlDecorator(ctx context.Context, f Filters, initialQuery string) (SqlQueryRetriever, error) {
 	log.C(ctx).Info("creating common decorator in common decorator factory")
-	retriever := inner
 
-	if len(baseFilters.Cursor) != 0 {
-		retriever = newCursorDecorator(retriever, baseFilters.Cursor)
-	}
+	retriever := newBaseQuery(initialQuery)
 
-	if len(baseFilters.Limit) != 0 {
-		lim, err := strconv.Atoi(baseFilters.Limit)
+	c.creators = SortCreators(c.creators)
+
+	var err error
+	for _, creator := range c.creators {
+		retriever, err = creator.Create(ctx, retriever, f)
 		if err != nil {
-			return nil, fmt.Errorf("invalid limit: %s", baseFilters.Limit)
+			log.C(ctx).Errorf("failed to create decorator, error %s", err.Error())
+			return nil, err
 		}
-		retriever = newLimitDecorator(retriever, lim)
 	}
 
 	return retriever, nil
+}
+
+func SortCreators(creators []SqlDecoratorCreator) []SqlDecoratorCreator {
+	sort.Slice(creators, func(index1, index2 int) bool {
+		return creators[index1].Priority() < creators[index2].Priority()
+	})
+
+	return creators
 }

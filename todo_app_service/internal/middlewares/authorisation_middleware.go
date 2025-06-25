@@ -1,11 +1,11 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/utils"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/tokens"
 	"context"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/oauth/tokens"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/internal/utils"
-	log "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/configuration"
-	"github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"github.com/gorilla/mux"
 	"net/http"
 )
@@ -15,11 +15,11 @@ type ctxKeyType struct{}
 var UserKey = ctxKeyType{}
 
 type UserService interface {
-	GetUserRecordByEmail(ctx context.Context, email string) (*models.User, error)
+	GetUserRecordByEmail(context.Context, string) (*models.User, error)
 }
 
 type jwtParser interface {
-	ParseJWT(ctx context.Context, tokenString string) (*tokens.Claims, error)
+	ParseJWT(context.Context, string) (*tokens.Claims, error)
 }
 
 type authorisationMiddleware struct {

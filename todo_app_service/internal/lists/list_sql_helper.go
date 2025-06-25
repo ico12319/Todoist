@@ -1,8 +1,8 @@
 package lists
 
 import (
+	models2 "Todo-List/internProject/todo_app_service/pkg/models"
 	"fmt"
-	models2 "github.com/I763039/Todo-List/internProject/todo_app_service/pkg/models"
 	"strings"
 )
 
