@@ -1,4 +1,4 @@
-package log
+package configuration
 
 import (
 	"Todo-List/internProject/todo_app_service/pkg/constants"

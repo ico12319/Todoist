@@ -4,9 +4,8 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
 	"Todo-List/internProject/todo_app_service/internal/utils"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
@@ -33,18 +32,13 @@ type fieldValidator interface {
 	Struct(interface{}) error
 }
 
-type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(context.Context, http.ResponseWriter, error) status_code_encoders.StatusCodeEncoder
-}
-
 type handler struct {
 	serv       listService
 	fValidator fieldValidator
-	factory    statusCodeEncoderFactory
 }
 
-func NewHandler(service listService, fValidator fieldValidator, factory statusCodeEncoderFactory) *handler {
-	return &handler{serv: service, fValidator: fValidator, factory: factory}
+func NewHandler(service listService, fValidator fieldValidator) *handler {
+	return &handler{serv: service, fValidator: fValidator}
 }
 
 func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
@@ -102,8 +96,7 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list's collaborators in list handler due to an error %s in list service", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -214,8 +207,7 @@ func (h *handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		log.C(ctx).Errorf("failed to change list name, error when calling list service method %s", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -250,8 +242,7 @@ func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.C(ctx).Error("failed to add collaborator in list handler, error when calling service function")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -283,8 +274,7 @@ func (h *handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Reques
 	if err = h.serv.DeleteCollaborator(ctx, listId, userId); err != nil {
 		log.C(ctx).Errorf("failed to delete collaborator from list in list handler")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -306,8 +296,7 @@ func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list record in list handler due to an error in list service")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -333,8 +322,7 @@ func (h *handler) HandleGetListOwner(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list owner in list handler due to an error in list service")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 

@@ -40,6 +40,10 @@ func (u *urlDecoratorFactory) Register(creator urlDecoratorsCreator) {
 }
 
 func (u *urlDecoratorFactory) CreateUrlDecorator(ctx context.Context, initialUrl string, filters UrlFilters) QueryParamsRetrievers {
+	if filters == nil {
+		return nil
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 

@@ -1,7 +1,7 @@
 package url_decorators
 
 import (
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"net/url"
 )

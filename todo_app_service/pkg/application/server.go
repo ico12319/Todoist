@@ -1,12 +1,26 @@
 package application
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/checks"
+	"Todo-List/internProject/todo_app_service/internal/converters"
+	"Todo-List/internProject/todo_app_service/internal/generators"
+	"Todo-List/internProject/todo_app_service/internal/gitHub"
+	"Todo-List/internProject/todo_app_service/internal/lists"
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/oauth"
+	"Todo-List/internProject/todo_app_service/internal/random_activites"
+	refresh2 "Todo-List/internProject/todo_app_service/internal/refresh"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
+	"Todo-List/internProject/todo_app_service/internal/todos"
+	"Todo-List/internProject/todo_app_service/internal/user_info"
+	"Todo-List/internProject/todo_app_service/internal/users"
+	"Todo-List/internProject/todo_app_service/internal/validators"
+	config "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/http_helpers"
+	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"Todo-List/internProject/todo_app_service/pkg/models"
-	"Todo-List/internProject/todo_app_service/pkg/tokens"
 	"context"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -72,33 +86,119 @@ type todoService interface {
 type oauthHandler interface {
 	HandleLogin(w http.ResponseWriter, r *http.Request)
 	HandleCallback(w http.ResponseWriter, r *http.Request)
-	HandleRefresh(w http.ResponseWriter, r *http.Request)
 }
 
 type jwtParser interface {
-	ParseJWT(ctx context.Context, tokenString string) (*tokens.Claims, error)
+	ParseJWT(ctx context.Context, tokenString string) (*jwt.Claims, error)
 }
 
-type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(ctx context.Context, w http.ResponseWriter, err error) status_code_encoders.StatusCodeEncoder
+type healthHandler interface {
+	HandleReadiness(w http.ResponseWriter, r *http.Request)
+	HandleLiveness(w http.ResponseWriter, r *http.Request)
+}
+
+type refreshHandler interface {
+	HandleRefresh(w http.ResponseWriter, r *http.Request)
+}
+
+type randomActivityHandler interface {
+	HandleSuggestion(w http.ResponseWriter, r *http.Request)
 }
 
 type server struct {
-	listHandler  listHandler
-	todoHandler  todoHandler
-	userHandler  userHandler
-	oauthHandler oauthHandler
-	listServ     listService
-	userServ     userService
-	tServ        todoService
-	generator    uuidGenerator
-	tokenParser  jwtParser
-	factory      statusCodeEncoderFactory
+	listHandler     listHandler
+	todoHandler     todoHandler
+	userHandler     userHandler
+	oauthHandler    oauthHandler
+	listServ        listService
+	userServ        userService
+	tServ           todoService
+	generator       uuidGenerator
+	tokenParser     jwtParser
+	healthHandler   healthHandler
+	refreshHandler  refreshHandler
+	activityHandler randomActivityHandler
+	configManger    *config.Config
 }
 
-func NewServer(listHandler listHandler, todoHandler todoHandler, userHandler userHandler, oauthHandler oauthHandler, listServ listService,
-	userServ userService, tServ todoService, generator uuidGenerator, tokenParser jwtParser, factory statusCodeEncoderFactory) *server {
-	return &server{listHandler: listHandler, todoHandler: todoHandler, userHandler: userHandler, oauthHandler: oauthHandler, listServ: listServ, userServ: userServ, tServ: tServ, generator: generator, tokenParser: tokenParser, factory: factory}
+func NewServer() *server {
+	configManagerInstance := config.GetInstance()
+
+	client := &http.Client{}
+	db := config.OpenPostgres(configManagerInstance.DbConfig)
+
+	tRepo := todos.NewSQLTodoDB(db)
+	lRepo := lists.NewSQLListDB(db)
+	uRepo := users.NewSQLUserDB(db)
+
+	uuidGen := generators.NewUuidGenerator()
+	timeGen := generators.NewTimeGenerator()
+
+	todoConverter := converters.NewTodoConverter()
+	uDBConverter := converters.NewUserConverter()
+	listConverter := converters.NewListConverter()
+
+	decoratorFactory := sql_query_decorators.GetDecoratorFactoryInstance()
+
+	httpRequester := http_helpers.NewHttpRequester()
+
+	uService := users.NewService(uRepo, uDBConverter, listConverter, todoConverter, uuidGen, decoratorFactory)
+	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uService, uDBConverter, decoratorFactory)
+	tService := todos.NewService(tRepo, lService, uuidGen, timeGen, todoConverter, uDBConverter, decoratorFactory)
+	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpRequester, client)
+
+	fValidator := validators.GetInstance()
+	tHandler := todos.NewHandler(tService, fValidator)
+	lHandler := lists.NewHandler(lService, fValidator)
+	uHandler := users.NewHandler(uService, fValidator)
+	activityHandler := random_activites.NewHandler(activityService)
+
+	gitHubService := gitHub.NewService(httpRequester, client)
+
+	jwtManager := jwt.NewJwtManager()
+
+	userInfoService := user_info.NewUserInfoService(gitHubService)
+	userInfoAggregator := user_info.NewAggregator(userInfoService)
+	stateGenerator := generators.NewStateGenerator()
+	jwtCreator := jwt.NewJwtService(uService, timeGen, jwtManager, configManagerInstance.JwtConfig.Secret)
+
+	refreshRepo := refresh2.NewSqlRefreshDB(db)
+	refreshConverter := converters.NewRefreshConverter()
+	refreshService := refresh2.NewService(refreshRepo, uService, refreshConverter, uDBConverter)
+	jwtIssuer := jwt.NewJwtIssuer(jwtCreator, userInfoAggregator, refreshService, uService)
+
+	oauthService := oauth.NewOauthService(stateGenerator, configManagerInstance.OauthConfig)
+	oHandler := oauth.NewHandler(oauthService, jwtIssuer)
+
+	tokenParser := jwt.NewJwtParseService(jwtManager)
+
+	hHandler := checks.NewHandler(db)
+	rHandler := refresh2.NewHandler(jwtIssuer)
+
+	return &server{
+		listHandler:     lHandler,
+		todoHandler:     tHandler,
+		userHandler:     uHandler,
+		oauthHandler:    oHandler,
+		listServ:        lService,
+		userServ:        uService,
+		tServ:           tService,
+		generator:       uuidGen,
+		tokenParser:     tokenParser,
+		healthHandler:   hHandler,
+		refreshHandler:  rHandler,
+		activityHandler: activityHandler,
+		configManger:    configManagerInstance,
+	}
+}
+
+func (s *server) registerRandomActivityPaths(router *mux.Router) {
+	router.HandleFunc("/random", s.activityHandler.HandleSuggestion).Methods(http.MethodGet)
+}
+
+func (s *server) registerHealthPaths(router *mux.Router) {
+	router.HandleFunc("/api/readyz", s.healthHandler.HandleReadiness).Methods(http.MethodGet)
+	router.HandleFunc("/api/healthz", s.healthHandler.HandleLiveness).Methods(http.MethodGet)
 }
 
 // only admins, list owners and collaborators can modify lists
@@ -145,10 +245,13 @@ func (s *server) registerOauthPaths(router *mux.Router) {
 	// then you should put the JWT in the Auth header in Postman and you will be able to call the API,
 	// keep you refresh token because you JWT token will expire after around 3 minutes.
 	router.HandleFunc("/auth2/callback", s.oauthHandler.HandleCallback).Methods(http.MethodGet)
+}
+
+func (s *server) registerRefreshPaths(router *mux.Router) {
 	// this is the url where you will be requesting your new JWT token when yours expires,
 	// you should put you refresh token in the request body and if it is correct you will be issued with
 	// new JWT and new Refresh token
-	router.HandleFunc("/tokens/refresh", s.oauthHandler.HandleRefresh).Methods(http.MethodPost)
+	router.HandleFunc("/tokens/refresh", s.refreshHandler.HandleRefresh).Methods(http.MethodPost)
 }
 
 // only admins and writers can create todos and lists
@@ -195,14 +298,23 @@ func (s *server) registerAdminPaths(router *mux.Router) {
 	router.HandleFunc("/users", s.userHandler.HandleDeleteUsers).Methods(http.MethodDelete)
 }
 
-func (s *server) Start(restServerPort string) {
+func (s *server) Start() {
 	oauthRouter := mux.NewRouter()
 	oauthRouter.Use(middlewares.ContentTypeMiddlewareFunc)
 	s.registerOauthPaths(oauthRouter)
 
+	healthRouter := oauthRouter.PathPrefix("").Subrouter()
+	s.registerHealthPaths(healthRouter)
+
+	refreshRouter := oauthRouter.PathPrefix("").Subrouter()
+	s.registerRefreshPaths(refreshRouter)
+
 	router := oauthRouter.PathPrefix("").Subrouter()
 	router.Use(middlewares.ContentTypeMiddlewareFunc, middlewares.LogEnrichMiddlewareFunc(s.generator),
 		middlewares.AuthorisationMiddlewareFunc(s.userServ, s.tokenParser))
+
+	randomActivityRouter := router.PathPrefix("/activities").Subrouter()
+	s.registerRandomActivityPaths(randomActivityRouter)
 
 	postRouter := router.PathPrefix("").Subrouter()
 	postRouter.Use(middlewares.ObjectCreationMiddlewareFunc)
@@ -217,7 +329,7 @@ func (s *server) Start(restServerPort string) {
 
 	listRouter := router.PathPrefix("/lists").Subrouter()
 	listIdAuthRouter := listRouter.PathPrefix(fmt.Sprintf("/{list_id:%s}", constants.UUID_REGEX)).Subrouter()
-	listIdAuthRouter.Use(middlewares.ExtractionListIdMiddlewareFunc, middlewares.ListAccessPermissionMiddlewareFunc(s.listServ, s.factory))
+	listIdAuthRouter.Use(middlewares.ExtractionListIdMiddlewareFunc, middlewares.ListAccessPermissionMiddlewareFunc(s.listServ))
 	s.registerListIdAuthRoutes(listIdAuthRouter)
 
 	listIdReadRouter := listRouter.PathPrefix(fmt.Sprintf("/{list_id:%s}", constants.UUID_REGEX)).Subrouter()
@@ -238,7 +350,7 @@ func (s *server) Start(restServerPort string) {
 	s.registerReadTodoIdPaths(todoIdReaderRouter)
 
 	todoIdAuthRouter := todoRouter.PathPrefix(fmt.Sprintf("/{todo_id:%s}", constants.UUID_REGEX)).Subrouter()
-	todoIdAuthRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc, middlewares.NewTodoModifyMiddlewareFunc(s.tServ, s.listServ, s.factory))
+	todoIdAuthRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc, middlewares.NewTodoModifyMiddlewareFunc(s.tServ, s.listServ))
 	s.registerTodoIdAuthRoutes(todoIdAuthRouter)
 
 	todoListReaderRouter := listIdReadRouter.PathPrefix("/todos").Subrouter()
@@ -256,6 +368,6 @@ func (s *server) Start(restServerPort string) {
 	userIdAuthRouter.Use(middlewares.ExtractionUserIdMiddlewareFunc, middlewares.UserAccessMiddlewareFunc)
 	s.registerAuthUserIdRoutes(userIdAuthRouter)
 
-	port := fmt.Sprintf(":%s", restServerPort)
+	port := fmt.Sprintf(":%s", s.configManger.RestConfig.Port)
 	log.Fatal(http.ListenAndServe(port, oauthRouter))
 }

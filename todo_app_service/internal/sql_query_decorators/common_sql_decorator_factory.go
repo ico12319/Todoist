@@ -39,7 +39,7 @@ func (c *decoratorFactory) RegisterCreator(creator SqlDecoratorCreator) {
 func (c *decoratorFactory) CreateSqlDecorator(ctx context.Context, f Filters, initialQuery string) (SqlQueryRetriever, error) {
 	log.C(ctx).Info("creating common decorator in common decorator factory")
 
-	retriever := newBaseQuery(initialQuery)
+	retriever := NewBaseQuery(initialQuery)
 
 	c.creators = SortCreators(c.creators)
 

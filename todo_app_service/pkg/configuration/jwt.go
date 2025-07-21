@@ -1,5 +1,5 @@
-package log
+package configuration
 
 type jwtConfig struct {
-	Secret []byte `envconfig:"JWT_SECRET"`
+	Secret []byte `envconfig:"JWT_KEY"`
 }

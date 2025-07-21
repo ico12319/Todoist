@@ -4,9 +4,8 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	middlewares2 "Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
 	"Todo-List/internProject/todo_app_service/internal/utils"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
@@ -32,19 +31,13 @@ type todoService interface {
 type fieldsValidator interface {
 	Struct(st interface{}) error
 }
-
-type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(ctx context.Context, w http.ResponseWriter, err error) status_code_encoders.StatusCodeEncoder
-}
-
 type handler struct {
 	serv       todoService
 	fValidator fieldsValidator
-	factory    statusCodeEncoderFactory
 }
 
-func NewHandler(serv todoService, fValidator fieldsValidator, factory statusCodeEncoderFactory) *handler {
-	return &handler{serv: serv, fValidator: fValidator, factory: factory}
+func NewHandler(serv todoService, fValidator fieldsValidator) *handler {
+	return &handler{serv: serv, fValidator: fValidator}
 }
 
 func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +55,7 @@ func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.C(ctx).Errorf("faile to get todo assignee, error %s when callin todo service", err.Error())
 
-		encoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -118,6 +110,7 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 	priority := utils.GetContentFromUrl(r, constants.PRIORITY)
 	limit := utils.GetLimitFromUrl(r)
 	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+	overdue := utils.GetContentFromUrl(r, constants.OVERDUE)
 
 	tFilter := &filters.TodoFilters{
 		BaseFilters: filters.BaseFilters{
@@ -126,6 +119,7 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 		},
 		Status:   status,
 		Priority: priority,
+		Overdue:  overdue,
 	}
 
 	todos, err := h.serv.GetTodoRecords(ctx, tFilter)
@@ -188,8 +182,7 @@ func (h *handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to update todo in todo handler, error %s when calling todo service", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -216,8 +209,7 @@ func (h *handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todo in todo handler due to an error in todo service")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -272,8 +264,7 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos by list_id, error in todo service")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -299,8 +290,7 @@ func (h *handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete todos by list_id, error in todo service")
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -329,8 +319,7 @@ func (h *handler) HandleGetTodoByListId(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todo with id %s from list with id %s, error %s", todoId, listId, err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 

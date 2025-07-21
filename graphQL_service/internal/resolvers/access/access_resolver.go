@@ -9,20 +9,11 @@ import (
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 )
-
-//go:generate mockery --name=httpClient --exported --output=./mocks --outpkg=mocks --filename=http_client.go --with-expecter=true
-type httpClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-//go:generate mockery --name=requestAuthSetter --exported --output=./mocks --outpkg=mocks --filename=request_auth_setter.go --with-expecter=true
-type requestAuthSetter interface {
-	DecorateRequest(context.Context, *http.Request) (*http.Request, error)
-}
 
 //go:generate mockery --name=accessConverter --exported --output=./mocks --outpkg=mocks --filename=access_converter.go --with-expecter=true
 type accessConverter interface {
@@ -35,28 +26,23 @@ type jsonMarshaller interface {
 	Marshal(interface{}) ([]byte, error)
 }
 
-//go:generate mockery --name=httpRequester --exported --output=./mocks --outpkg=mocks --filename=http_requester2.go --with-expecter=true
-type httpRequester interface {
-	NewRequestWithContext(context.Context, string, string, io.Reader) (*http.Request, error)
+//go:generate mockery --name=httpResponseGetter --exported --output=./mocks --outpkg=mocks --filename=http_response_getter.go --with-expecter=true
+type httpResponseGetter interface {
+	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
 }
-
 type resolver struct {
-	client         httpClient
 	restUrl        string
-	authSetter     requestAuthSetter
 	converter      accessConverter
 	jsonMarshaller jsonMarshaller
-	httpRequester  httpRequester
+	responseGetter httpResponseGetter
 }
 
-func NewResolver(client httpClient, authSetter requestAuthSetter, converter accessConverter, jsonMarshaller jsonMarshaller, httpRequester httpRequester, restUrl string) *resolver {
+func NewResolver(converter accessConverter, jsonMarshaller jsonMarshaller, responseGetter httpResponseGetter, restUrl string) *resolver {
 	return &resolver{
-		client:         client,
-		authSetter:     authSetter,
+		restUrl:        restUrl,
 		converter:      converter,
 		jsonMarshaller: jsonMarshaller,
-		httpRequester:  httpRequester,
-		restUrl:        restUrl,
+		responseGetter: responseGetter,
 	}
 }
 
@@ -71,30 +57,23 @@ func (r *resolver) ExchangeRefreshToken(ctx context.Context, input gql.RefreshTo
 		return &gql.Access{}, errors.New("error when trying to marshal JSON refresh payload")
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonRefreshPayload))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonRefreshPayload))
 	if err != nil {
-		log.C(ctx).Errorf("failed to make http request, error %s", err.Error())
-		return &gql.Access{}, errors.New("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request, error %s", err.Error())
-		return &gql.Access{}, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to receive http response, error %s", err.Error())
+		log.C(ctx).Errorf("failed to exchnage refresh token, error %s when trying to get http response", err.Error())
 		return &gql.Access{}, errors.New("error when trying to get http response")
 	}
 	defer resp.Body.Close()
 
-	callbackResponse, err := utils.HandleHttpCode[*models.CallbackResponse](resp)
-	if err != nil {
-		log.C(ctx).Errorf("failed to handler http code prperly, error %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
 		return &gql.Access{}, err
 	}
 
-	return r.converter.ToGQL(callbackResponse), nil
+	var refreshResponse models.CallbackResponse
+	if err = json.NewDecoder(resp.Body).Decode(&refreshResponse); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return &gql.Access{}, err
+	}
+
+	return r.converter.ToGQL(&refreshResponse), nil
 }

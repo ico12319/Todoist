@@ -3,7 +3,7 @@ package utils
 import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
-	"Todo-List/internProject/todo_app_service/internal/oauth/githubModels"
+	"Todo-List/internProject/todo_app_service/internal/gitHub"
 	config "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
@@ -112,10 +112,46 @@ func MapPostgresTodoError(err error, todo *entities.Todo) error {
 	return err
 }
 
-func AssignValueToStringPtr(ptr *string, uuid uuid.UUID) *string {
-	str := uuid.String()
-	ptr = &str
-	return ptr
+func MapPostgresUserError(err error, user *entities.User) error {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) {
+		return errors.New("unexpected database error")
+	}
+
+	switch pqErr.Code {
+	case "23505":
+		switch pqErr.Constraint {
+		case "users_pkey":
+			return application_errors.NewAlreadyExistError(constants.USER_TARGET, user.Id.String())
+		case "users_email_key":
+
+			return application_errors.NewAlreadyExistError(constants.USER_TARGET, user.Email)
+		}
+	}
+
+	return errors.New("unexpected database error")
+}
+
+func MapPostgresNonExistingUserInUserTable(err error, refresh *entities.Refresh) error {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) {
+		return errors.New("unexpected database error")
+	}
+
+	switch pqErr.Code {
+	case "23505":
+		switch pqErr.Constraint {
+		case "user_refresh_tokens_pkey":
+			return application_errors.NewAlreadyExistError(constants.USER_TARGET, refresh.UserId.String())
+		case "users_refresh_tokens_refresh_token_key":
+			return application_errors.NewAlreadyExistError(constants.REFRESH_TARGET, refresh.RefreshToken)
+		}
+	case "23503":
+		return application_errors.NewNotFoundError(constants.USER_TARGET, refresh.UserId.String())
+	}
+
+	return errors.New("unexpected database error")
+
 }
 
 func GetValueFromContext[T any](ctx context.Context, valueKey interface{}) (T, error) {
@@ -153,15 +189,7 @@ func CheckForValidationError(val fieldValidator, s interface{}) (string, error) 
 	return "", nil
 }
 
-func CheckForNotFoundError(err error) bool {
-	var nfErr *application_errors.NotFoundError
-	if errors.As(err, &nfErr) {
-		return true
-	}
-	return false
-}
-
-func getOrganizationNames(organizations []*githubModels.Organization) []string {
+func getOrganizationNames(organizations []*gitHub.Organization) []string {
 	orgNames := make([]string, 0, len(organizations))
 	for _, org := range organizations {
 		orgNames = append(orgNames, org.Login)
@@ -176,7 +204,7 @@ func containsSubstring(slice []string, substr string) bool {
 	})
 }
 
-func DetermineRole(organizations []*githubModels.Organization) (string, error) {
+func DetermineRole(organizations []*gitHub.Organization) (string, error) {
 	orgNames := getOrganizationNames(organizations)
 
 	if containsSubstring(orgNames, constants.ADMIN_ORG) {
@@ -204,8 +232,8 @@ func DetermineCorrectJwtErrorMessage(err error) string {
 	}
 
 	return "invalid token"
-
 }
+
 func DetermineErrorWhenSigningJWT(err error) error {
 	if errors.Is(err, jwt.ErrInvalidKeyType) {
 		return errors.New("invalid key type passed when trying to sign JWT")
@@ -232,4 +260,66 @@ func DetermineJWTErrorWhenParsingWithClaims(ctx context.Context, err error) erro
 	}
 
 	return nil
+}
+
+func EncodeErrorWithCorrectStatusCode(w http.ResponseWriter, err error) {
+	var nfErr *application_errors.NotFoundError
+	if errors.As(err, &nfErr) {
+		EncodeError(w, err.Error(), http.StatusNotFound)
+	} else {
+		EncodeError(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func GetServerStatus(statusValue string) map[string]string {
+	return map[string]string{
+		"status": statusValue,
+	}
+}
+
+func OrchestrateGoRoutines(ctx context.Context, chan1 chan ChannelResult[string], chan2 chan ChannelResult[string]) (string, string, error) {
+	var result1 string
+	var result2 string
+	for i := 0; i < constants.GOROUTINES_COUNT; i++ {
+		select {
+		case chRes := <-chan1:
+			if chRes.Err != nil {
+				config.C(ctx).Errorf("failed to get jwt, error %s when trying to determine user's github email", chRes.Err.Error())
+				return "", "", chRes.Err
+			}
+
+			if len(chRes.Result) == 0 {
+				config.C(ctx).Errorf("failed to get jwt, empty email...")
+				return "", "", errors.New("email can't be empty")
+			}
+
+			result1 = chRes.Result
+
+		case chRes := <-chan2:
+			if chRes.Err != nil {
+				config.C(ctx).Errorf("failed to get jwt, error %s when trying to get user's app role", chRes.Err.Error())
+				return "", "", chRes.Err
+			}
+			if len(chRes.Result) == 0 {
+				config.C(ctx).Errorf("failed to get jwt, empty role received...")
+				return "", "", errors.New("role can't be determined")
+			}
+
+			result2 = chRes.Result
+
+		case <-ctx.Done():
+			return "", "", ctx.Err()
+		}
+	}
+
+	return result1, result2, nil
+}
+
+func CheckForNotFoundError(err error) bool {
+	var applicationError *application_errors.NotFoundError
+	if errors.As(err, &applicationError) {
+		return true
+	}
+
+	return false
 }

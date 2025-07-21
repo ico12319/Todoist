@@ -1,7 +1,7 @@
 package sql_query_decorators
 
 import (
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 )
 
@@ -17,7 +17,7 @@ type baseQuery struct {
 	initialQuery string
 }
 
-func newBaseQuery(initialQuery string) SqlQueryRetriever {
+func NewBaseQuery(initialQuery string) SqlQueryRetriever {
 	return &baseQuery{initialQuery: initialQuery}
 }
 

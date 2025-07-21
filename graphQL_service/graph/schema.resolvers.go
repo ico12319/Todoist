@@ -17,7 +17,7 @@ func (r *listResolver) Owner(ctx context.Context, obj *gql.List) (*gql.User, err
 }
 
 // Todos is the resolver for the todos field.
-func (r *listResolver) Todos(ctx context.Context, obj *gql.List, limit *int32, after *string, criteria *gql.TodosFilterInput) (*gql.TodoPage, error) {
+func (r *listResolver) Todos(ctx context.Context, obj *gql.List, filter *gql.TodosFilterInput, limit *int32, after *string) (*gql.TodoPage, error) {
 	parsedLimit := strconv.Itoa(int(*limit))
 
 	filters := &url_filters.TodoFilters{
@@ -25,7 +25,7 @@ func (r *listResolver) Todos(ctx context.Context, obj *gql.List, limit *int32, a
 			Limit:  &parsedLimit,
 			Cursor: after,
 		},
-		TodoFilters: criteria,
+		TodoFilters: filter,
 	}
 
 	return r.lResolver.Todos(ctx, obj, filters)
@@ -139,6 +139,7 @@ func (r *queryResolver) Todos(ctx context.Context, limit *int32, after *string, 
 		},
 		TodoFilters: criteria,
 	}
+
 	return r.tResolver.Todos(ctx, filters)
 }
 
@@ -163,6 +164,11 @@ func (r *queryResolver) User(ctx context.Context, id string) (*gql.User, error) 
 	return r.uResolver.User(ctx, id)
 }
 
+// RandomActivity is the resolver for the randomActivity field.
+func (r *queryResolver) RandomActivity(ctx context.Context) (*gql.RandomActivity, error) {
+	return r.activityResolver.RandomActivity(ctx)
+}
+
 // List is the resolver for the list field.
 func (r *todoResolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, error) {
 	return r.tResolver.List(ctx, obj)
@@ -174,24 +180,32 @@ func (r *todoResolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User
 }
 
 // AssignedTo is the resolver for the assigned_to field.
-func (r *userResolver) AssignedTo(ctx context.Context, obj *gql.User, limit *int32, after *string) (*gql.TodoPage, error) {
+func (r *userResolver) AssignedTo(ctx context.Context, obj *gql.User, filter *gql.TodosFilterInput, limit *int32, after *string) (*gql.TodoPage, error) {
 	parsedLimit := strconv.Itoa(int(*limit))
 
-	filters := &url_filters.BaseFilters{
-		Limit:  &parsedLimit,
-		Cursor: after,
+	filters := &url_filters.TodoFilters{
+		BaseFilters: url_filters.BaseFilters{
+			Limit:  &parsedLimit,
+			Cursor: after,
+		},
+		TodoFilters: filter,
 	}
+
 	return r.uResolver.AssignedTo(ctx, obj, filters)
 }
 
 // ParticipateIn is the resolver for the participate_in field.
-func (r *userResolver) ParticipateIn(ctx context.Context, obj *gql.User, limit *int32, after *string) (*gql.ListPage, error) {
+func (r *userResolver) ParticipateIn(ctx context.Context, obj *gql.User, filter *gql.UserRoleFilter, limit *int32, after *string) (*gql.ListPage, error) {
 	parsedLimit := strconv.Itoa(int(*limit))
 
-	filters := &url_filters.BaseFilters{
-		Limit:  &parsedLimit,
-		Cursor: after,
+	filters := &url_filters.UserFilters{
+		BaseFilters: url_filters.BaseFilters{
+			Limit:  &parsedLimit,
+			Cursor: after,
+		},
+		UserFilters: filter,
 	}
+
 	return r.uResolver.ParticipateIn(ctx, obj, filters)
 }
 

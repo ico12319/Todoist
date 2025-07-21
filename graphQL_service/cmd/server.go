@@ -5,23 +5,24 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/auth_header_setters"
 	"Todo-List/internProject/graphQL_service/internal/directives"
 	"Todo-List/internProject/graphQL_service/internal/gql_converters"
+	"Todo-List/internProject/graphQL_service/internal/gql_http_helpers"
 	gql_middlewares2 "Todo-List/internProject/graphQL_service/internal/gql_middlewares"
-	"Todo-List/internProject/graphQL_service/internal/marshallers"
-	"Todo-List/internProject/graphQL_service/internal/requesters"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/access"
+	"Todo-List/internProject/graphQL_service/internal/resolvers/activity"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/list"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/todo"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/user"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	_ "Todo-List/internProject/graphQL_service/internal/url_decorators/url_decorators_creators"
-	"Todo-List/internProject/todo_app_service/pkg/tokens"
+	http_helpers2 "Todo-List/internProject/todo_app_service/pkg/http_helpers"
+	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"context"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"github.com/gorilla/mux"
 	"github.com/vektah/gqlparser/v2/ast"
 	"net/http"
@@ -40,24 +41,27 @@ func main() {
 	userConv := gql_converters.NewUserConverter(roleConverter)
 	todoConv := gql_converters.NewTodoConverter(pConverter, sConverter)
 	accessConv := gql_converters.NewAccessConverter()
+	activityConverter := gql_converters.NewActivityConverter()
 
 	urlDecoratorFactory := url_decorators.GetUrlDecoratorFactoryInstance()
 	requestDecorator := auth_header_setters.NewRequestAuthHeader()
 
-	httpRequester := requesters.NewHttpRequester()
-	jsonMarshaller := marshallers.NewJsonMarshaller()
+	httpRequester := http_helpers2.NewHttpRequester()
+	jsonMarshaller := gql_http_helpers.NewJsonMarshaller()
 
-	listResolver := list.NewResolver(httpClient, listConv, userConv, todoConv, restUrl, urlDecoratorFactory, requestDecorator, jsonMarshaller, httpRequester)
-	todoResolver := todo.NewResolver(httpClient, urlDecoratorFactory, todoConv, userConv, listConv, restUrl, requestDecorator, jsonMarshaller, httpRequester)
-	userResolver := user.NewResolver(httpClient, userConv, listConv, todoConv, restUrl, urlDecoratorFactory, requestDecorator, httpRequester)
-	accessResolver := access.NewResolver(httpClient, requestDecorator, accessConv, jsonMarshaller, httpRequester, restUrl)
+	httpResponseGetter := gql_http_helpers.NewHttpResponseGetter(httpClient, requestDecorator, httpRequester)
 
-	jwtParserHelper := tokens.NewJwtParser()
-	jwtParser := tokens.NewJwtParseService(jwtParserHelper)
-	
+	listResolver := list.NewResolver(listConv, userConv, todoConv, restUrl, urlDecoratorFactory, httpResponseGetter, jsonMarshaller)
+	todoResolver := todo.NewResolver(urlDecoratorFactory, todoConv, userConv, listConv, restUrl, jsonMarshaller, httpResponseGetter)
+	userResolver := user.NewResolver(userConv, listConv, todoConv, restUrl, urlDecoratorFactory, httpResponseGetter)
+	accessResolver := access.NewResolver(accessConv, jsonMarshaller, httpResponseGetter, restUrl)
+	activityResolver := activity.NewResolver(restUrl, httpResponseGetter, activityConverter)
+	jwtParserHelper := jwt.NewJwtManager()
+	jwtParser := jwt.NewJwtParseService(jwtParserHelper)
+
 	roleDirective := directives.NewRoleDirectiveImplementation(jwtParser)
 
-	root := graph2.NewResolver(listResolver, todoResolver, userResolver, accessResolver)
+	root := graph2.NewResolver(listResolver, todoResolver, userResolver, accessResolver, activityResolver)
 	srv := handler.New(graph2.NewExecutableSchema(graph2.Config{
 		Resolvers: root,
 		Directives: graph2.DirectiveRoot{

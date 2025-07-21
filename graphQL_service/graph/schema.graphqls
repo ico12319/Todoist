@@ -14,6 +14,16 @@ enum TodoStatus{
   OPEN
 }
 
+enum TodoType{
+  EXPIRED
+  ACTIVE
+}
+
+enum UserListRole{
+  OWNER
+  PARTICIPANT
+}
+
 enum Priority{
   VERY_LOW
   LOW
@@ -22,12 +32,16 @@ enum Priority{
   VERY_HIGH
 }
 
+input UserRoleFilter{
+  role: UserListRole
+}
+
 type User{
   id: ID!
   email: String!
   role: UserRole @hasRole
-  assigned_to(limit: Int = 100, after: ID): TodoPage!
-  participate_in(limit: Int = 100, after: ID): ListPage!
+  assigned_to(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
+  participate_in(filter: UserRoleFilter, limit: Int = 100, after: ID): ListPage!
 }
 
 type Todo{
@@ -50,13 +64,26 @@ type List{
   created_at: Time!
   last_updated: Time!
   owner: User!
-  todos(limit: Int = 100, after: ID, criteria: TodosFilterInput): TodoPage!
+  todos(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
   collaborators(limit: Int = 100, after: ID): UserPage!
+}
+
+type RandomActivity{
+  activity: String!
+  type: String!
+  participants: Int!
+  kidFriendly: Boolean!
+}
+
+type Access{
+  jwt_token: String!
+  refresh_token: String!
 }
 
 input TodosFilterInput{
   status: TodoStatus
   priority: Priority
+  type: TodoType
 }
 
 input CreateListInput{
@@ -164,11 +191,6 @@ input RefreshTokenInput{
   refresh_token: String!
 }
 
-type Access{
-  jwt_token: String!
-  refresh_token: String!
-}
-
 type Query{
   lists(limit: Int = 100, after: ID): ListPage!
   list(id: ID!): List
@@ -178,6 +200,8 @@ type Query{
 
   users(limit: Int = 100, after: ID): UserPage!
   user(id: ID!): User
+
+  randomActivity: RandomActivity!
 }
 
 type Mutation{

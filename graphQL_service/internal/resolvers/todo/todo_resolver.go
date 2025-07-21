@@ -6,24 +6,19 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/gql_constants"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 	"io"
 	"net/http"
-	"reflect"
 )
 
-type httpClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-type requestAuthSetter interface {
-	DecorateRequest(context.Context, *http.Request) (*http.Request, error)
+type httpResponseGetter interface {
+	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
@@ -32,11 +27,6 @@ type urlDecoratorFactory interface {
 
 type jsonMarshaller interface {
 	Marshal(interface{}) ([]byte, error)
-}
-
-//go:generate mockery --name=HttpRequester --output=./mocks --outpkg=mocks --filename=http_requester.go --with-expecter=true
-type httpRequester interface {
-	NewRequestWithContext(context.Context, string, string, io.Reader) (*http.Request, error)
 }
 
 type todoConverter interface {
@@ -57,28 +47,24 @@ type userConverter interface {
 }
 
 type resolver struct {
-	client         httpClient
 	factory        urlDecoratorFactory
 	tConverter     todoConverter
 	uConverter     userConverter
 	lConverter     listConverter
 	restUrl        string
-	authSetter     requestAuthSetter
-	httpRequester  httpRequester
 	jsonMarshaller jsonMarshaller
+	responseGetter httpResponseGetter
 }
 
-func NewResolver(client httpClient, factory urlDecoratorFactory, tConverter todoConverter, uConverter userConverter, lConverter listConverter, restUrl string, authSetter requestAuthSetter, jsonMarshaller jsonMarshaller, httpRequester httpRequester) *resolver {
+func NewResolver(factory urlDecoratorFactory, tConverter todoConverter, uConverter userConverter, lConverter listConverter, restUrl string, jsonMarshaller jsonMarshaller, responseGetter httpResponseGetter) *resolver {
 	return &resolver{
-		client:         client,
 		factory:        factory,
 		tConverter:     tConverter,
 		uConverter:     uConverter,
 		lConverter:     lConverter,
 		restUrl:        restUrl,
-		authSetter:     authSetter,
 		jsonMarshaller: jsonMarshaller,
-		httpRequester:  httpRequester,
+		responseGetter: responseGetter,
 	}
 }
 
@@ -87,41 +73,34 @@ func (r *resolver) Todos(ctx context.Context, filter *url_filters.TodoFilters) (
 
 	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.TODO_PATH, filter)
 
-	requestUrl, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
+	url, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
+
+	log.C(ctx).Errorf("greshkata batyo %s", url)
 
 	if err != nil {
 		log.C(ctx).Errorf("failed to determine correct query param in todo resolver")
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, requestUrl, nil)
-
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get todos in todo resolver, error when making http request %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get todos in todo resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todos in todo resolver, error when trying to get response %s", err.Error())
+	var todos []*models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	modelTodos, err := utils.HandleHttpCode[[]*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Error("failed to get todos in todo resolver, error when trying to decode JSON")
-		return nil, err
-	}
-
-	gqlTodos := r.tConverter.ManyToGQL(modelTodos)
+	gqlTodos := r.tConverter.ManyToGQL(todos)
 
 	pageInfo := utils.InitPageInfo[*gql.Todo](gqlTodos, func(todo *gql.Todo) string {
 		return todo.ID
@@ -163,24 +142,9 @@ func (r *resolver) DeleteTodosByListID(ctx context.Context, id string) ([]*gql.D
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete todos by list_id %s, error when making http request %s", id, err.Error())
-		return r.tConverter.ManyToDeleteTodoPayload(gqlTodos, false), err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete todos by list_id %s, error when trying to get http response %s", id, err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -202,40 +166,30 @@ func (r *resolver) UpdateTodo(ctx context.Context, id string, input gql.UpdateTo
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		log.C(ctx).Errorf("failed to update todo with id %s, error when trying to make http request %s", id, err)
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-
-	if err != nil {
-		log.C(ctx).Errorf("failed to update todo with id %s, error when trying to get http response %s", id, err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelTodo, err := utils.HandleHttpCode[*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Errorf("failed to update todo, error when trying to decode JSON body %s", err.Error())
-		return nil, err
-	}
-
-	if reflect.ValueOf(modelTodo).IsZero() {
-		log.C(ctx).Info("http status not found received when calling rest api, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return r.tConverter.ToGQL(modelTodo), nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to update todo in todo resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var todo models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todo); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.tConverter.ToGQL(&todo), nil
 }
 
 func (r *resolver) DeleteTodo(ctx context.Context, id string) (*gql.DeleteTodoPayload, error) {
@@ -259,24 +213,10 @@ func (r *resolver) DeleteTodo(ctx context.Context, id string) (*gql.DeleteTodoPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete todo with id %s, error when calling http method %s", id, err.Error())
-		return r.tConverter.FromGQLModelToDeleteTodoPayload(gqlTodo, false), err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete todo with id %s, error when trying to get response %s", id, err.Error())
-		return r.tConverter.FromGQLModelToDeleteTodoPayload(gqlTodo, false), err
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -286,35 +226,22 @@ func (r *resolver) DeleteTodo(ctx context.Context, id string) (*gql.DeleteTodoPa
 func (r *resolver) DeleteTodos(ctx context.Context) ([]*gql.DeleteTodoPayload, error) {
 	log.C(ctx).Info("deleting all todos in todo resolver")
 
-	gqlTodos, err := r.Todos(ctx, nil)
+	gqlTodos, err := r.getTodos(ctx)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete all todos in todo resolver, error when trying to get all todos %s", err.Error())
 		return nil, err
 	}
 
 	url := r.restUrl + gql_constants.TODO_PATH
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete all todos in todo resolver, error when trying to make http request %s", err.Error())
-		return r.tConverter.ManyToDeleteTodoPayload(gqlTodos.Data, false), err
-	}
 
-	req, err = r.authSetter.DecorateRequest(ctx, req)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete all todos in todo resolver, error when trying to get response %s", err.Error())
-		return r.tConverter.ManyToDeleteTodoPayload(gqlTodos.Data, false), err
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.tConverter.ManyToDeleteTodoPayload(gqlTodos.Data, true), nil
+	return r.tConverter.ManyToDeleteTodoPayload(gqlTodos, true), nil
 }
 
 func (r *resolver) CreateTodo(ctx context.Context, input gql.CreateTodoInput) (*gql.Todo, error) {
@@ -330,34 +257,25 @@ func (r *resolver) CreateTodo(ctx context.Context, input gql.CreateTodoInput) (*
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		log.C(ctx).Errorf("failed to create todo, error when trying to make http request %s", err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to create todo, error when trying to get http response %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelTodo, err := utils.HandleHttpCode[*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decode JSON body %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to create todo in todo resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	return r.tConverter.ToGQL(modelTodo), nil
+	var todo models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todo); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.tConverter.ToGQL(&todo), nil
 }
 
 func (r *resolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, error) {
@@ -366,34 +284,25 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, er
 	formattedSuffix := fmt.Sprintf("/%s/assignee", obj.ID)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get todo's assignee, error when trying to make http request %s", err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todo's assignee, error when trying to get http response %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelUser, err := utils.HandleHttpCode[*models.User](resp)
-	if err != nil {
-		log.C(ctx).Error("error when trying to decode assignee from http response body")
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get user assigend to todo in todo resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	return r.uConverter.ToGQL(modelUser), nil
+	var user models.User
+	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.uConverter.ToGQL(&user), nil
 }
 
 func (r *resolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, error) {
@@ -408,36 +317,25 @@ func (r *resolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, error) {
 	formattedSuffix := fmt.Sprintf("/%s", modelTodo.ListId)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get todo's list, error when making http request %s", err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todo' list, error when trying to receive http response %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	list, err := utils.HandleHttpCode[*models.List](resp)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decode http response body %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get list where todo is in todo resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	return r.lConverter.ToGQL(list), nil
+	var list models.List
+	if err = json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.lConverter.ToGQL(&list), nil
 }
 
 func (r *resolver) getModelTodo(ctx context.Context, id string) (*models.Todo, error) {
@@ -446,40 +344,30 @@ func (r *resolver) getModelTodo(ctx context.Context, id string) (*models.Todo, e
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get todo with id %s in todo resolver, error when making http request %s", id, err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todo with id %s in todo resolver, error when trying to get response %s", id, err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	todo, err := utils.HandleHttpCode[*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Error("failed to get todo with id %s in todo resolver, error when trying to decode JSON body")
-		return nil, err
-	}
-
-	if reflect.ValueOf(todo).IsZero() {
-		log.C(ctx).Info("http status code not found received when calling rest api, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return todo, nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get model todo in todo resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var todo models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todo); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return &todo, nil
 }
 
 func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.Todo, error) {
@@ -488,37 +376,54 @@ func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.
 	formattedSuffix := fmt.Sprintf("/%s%s", listId, gql_constants.TODO_PATH)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get todos by list_id %s, error when making http request %s", listId, err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todos by list_id %s, error when trying to get http response %s", listId, err.Error())
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelTodos, err := utils.HandleHttpCode[[]*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get todos by list_id %s, error when trying to decode JSON", listId)
-		return nil, err
-	}
-
-	if reflect.ValueOf(modelTodos).IsZero() {
-		log.C(ctx).Info("http not found status code received, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return r.tConverter.ManyToGQL(modelTodos), nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get todos by list id %s in todo resolver, error %s due to bad response status code", listId, err.Error())
+		return nil, err
+	}
+
+	var todos []*models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+		log.C(ctx).Errorf("failed to decode http response, error %s", err.Error())
+		return nil, err
+	}
+	
+	return r.tConverter.ManyToGQL(todos), nil
+}
+
+func (r *resolver) getTodos(ctx context.Context) ([]*gql.Todo, error) {
+	log.C(ctx).Info("getting todos without filters in todo resolver")
+
+	url := r.restUrl + gql_constants.TODO_PATH
+
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get todos without filters in todo resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var todos []*models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.tConverter.ManyToGQL(todos), nil
 }

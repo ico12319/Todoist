@@ -1,7 +1,7 @@
 package sql_query_decorators
 
 import (
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
 )
@@ -11,7 +11,7 @@ type limitDecorator struct {
 	limit     int
 }
 
-func NewLimitDecorator(retriever SqlQueryRetriever, limit int) SqlQueryRetriever {
+func NewLimitDecorator(retriever SqlQueryRetriever, limit int) *limitDecorator {
 	return &limitDecorator{retriever: retriever, limit: limit}
 }
 
@@ -24,5 +24,4 @@ func (l *limitDecorator) DetermineCorrectSqlQuery(ctx context.Context) string {
 
 	currentQuery += formattedSuffix
 	return currentQuery
-
 }

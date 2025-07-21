@@ -48,6 +48,7 @@ const USER_ID = "user_id"
 const LIST_TARGET = "list"
 const USER_TARGET = "user"
 const TODO_TARGET = "todo"
+const REFRESH_TARGET = "refresh token"
 
 const JSON_FORMAT = "json"
 const TEXT_FORMAT = "text"
@@ -69,3 +70,19 @@ const DEFAULT_PRIORITY = 10
 const CURSOR_PRIORITY = 15
 
 const LIMIT_PRIORITY = 20
+
+const OWNER_ROLE = "owner"
+const PARTICIPANT_ROLE = "participant"
+
+const ROLE = "role"
+
+const OVERDUE = "overdue"
+
+const TRUE_VALUE = "true"
+const FALSE_VALUE = "false"
+
+const EXPIRED = "EXPIRED"
+
+const DATABASE_DOWN_STATUS = "database down"
+const READY_STATUS = "ready"
+const OK_STATUS = "ok"

@@ -6,26 +6,21 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/gql_constants"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 	"io"
 	"net/http"
-	"reflect"
 )
 
-type httpClient interface {
-	Do(*http.Request) (*http.Response, error)
+type httpResponseGetter interface {
+	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
 	CreateUrlDecorator(context.Context, string, url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
-}
-
-type requestAuthSetter interface {
-	DecorateRequest(context.Context, *http.Request) (*http.Request, error)
 }
 
 type userConverter interface {
@@ -33,11 +28,6 @@ type userConverter interface {
 	ManyToGQL([]*models.User) []*gql.User
 	FromGQLToDeleteUserPayload(*gql.User, bool) *gql.DeleteUserPayload
 	ManyFromGQLToDeleteUserPayload([]*gql.User, bool) []*gql.DeleteUserPayload
-}
-
-//go:generate mockery --name=HttpRequester --output=./mocks --outpkg=mocks --filename=http_requester.go --with-expecter=true
-type httpRequester interface {
-	NewRequestWithContext(context.Context, string, string, io.Reader) (*http.Request, error)
 }
 
 type todoConverter interface {
@@ -49,26 +39,22 @@ type listConverter interface {
 }
 
 type resolver struct {
-	client        httpClient
-	uConverter    userConverter
-	lConverter    listConverter
-	tConverter    todoConverter
-	factory       urlDecoratorFactory
-	restUrl       string
-	authSetter    requestAuthSetter
-	httpRequester httpRequester
+	uConverter     userConverter
+	lConverter     listConverter
+	tConverter     todoConverter
+	factory        urlDecoratorFactory
+	restUrl        string
+	responseGetter httpResponseGetter
 }
 
-func NewResolver(client httpClient, uConverter userConverter, lConverter listConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, authSetter requestAuthSetter, httpRequester httpRequester) *resolver {
+func NewResolver(uConverter userConverter, lConverter listConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, responseGetter httpResponseGetter) *resolver {
 	return &resolver{
-		client:        client,
-		uConverter:    uConverter,
-		lConverter:    lConverter,
-		tConverter:    tConverter,
-		restUrl:       restUrl,
-		factory:       factory,
-		authSetter:    authSetter,
-		httpRequester: httpRequester,
+		uConverter:     uConverter,
+		lConverter:     lConverter,
+		tConverter:     tConverter,
+		restUrl:        restUrl,
+		factory:        factory,
+		responseGetter: responseGetter,
 	}
 }
 
@@ -82,34 +68,25 @@ func (r *resolver) Users(ctx context.Context, filters *url_filters.BaseFilters) 
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get users, error when making http request")
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Error("failed to get users, error when trying to get http response")
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelUsers, err := utils.HandleHttpCode[[]*models.User](resp)
-	if err != nil {
-		log.C(ctx).Error("failed to get users, error when decoding JSON response")
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get list where todo is in todo resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	gqlUsers := r.uConverter.ManyToGQL(modelUsers)
+	var users []*models.User
+	if err = json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	gqlUsers := r.uConverter.ManyToGQL(users)
 
 	pageInfo := utils.InitPageInfo[*gql.User](gqlUsers, func(user *gql.User) string {
 		return user.ID
@@ -128,39 +105,30 @@ func (r *resolver) User(ctx context.Context, id string) (*gql.User, error) {
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get user, error when making http request")
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Error("failed to get user, error when trying to get http response")
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelUser, err := utils.HandleHttpCode[*models.User](resp)
-	if err != nil {
-		log.C(ctx).Error("failed to get user, error when decoding JSON response")
-		return nil, err
-	}
-
-	if reflect.ValueOf(modelUser).IsZero() {
-		log.C(ctx).Info("http status not found received when calling rest api, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return r.uConverter.ToGQL(modelUser), nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get user with id %s user resolver, error %s due to bad response status code", id, err.Error())
+		return nil, err
+	}
+
+	var user models.User
+	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.uConverter.ToGQL(&user), nil
 }
 
 func (r *resolver) DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPayload, error) {
@@ -184,31 +152,17 @@ func (r *resolver) DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete user with id %s, error when making http request", id)
-		return r.uConverter.FromGQLToDeleteUserPayload(gqlUser, false), nil
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete user with id %s, error when trying to get http response", id)
-		return r.uConverter.FromGQLToDeleteUserPayload(gqlUser, false), nil
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	return r.uConverter.FromGQLToDeleteUserPayload(gqlUser, true), nil
 }
 
-func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.BaseFilters) (*gql.TodoPage, error) {
+func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.TodoFilters) (*gql.TodoPage, error) {
 	log.C(ctx).Infof("getting todo assigned to user with id %s", obj.ID)
 
 	formattedSuffix := fmt.Sprintf("/%s", obj.ID)
@@ -221,23 +175,9 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *u
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Error("failed to get todos assigned to user, error when trying to make http request")
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Error("failed to get todos assigned to user, error trying to get http response")
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -261,7 +201,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *u
 	}, nil
 }
 
-func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error) {
+func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.UserFilters) (*gql.ListPage, error) {
 	log.C(ctx).Infof("getting lists shared with user with id %s", obj.ID)
 
 	formattedSuffix := fmt.Sprintf("/%s", obj.ID)
@@ -274,23 +214,9 @@ func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *ur
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get lists shared with user with id %s, error when trying to make http request", obj.ID)
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request's auth header, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: "unauthorized user",
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get lists shared with user with id %s, error when trying to get response", obj.ID)
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -317,7 +243,7 @@ func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *ur
 func (r *resolver) DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, error) {
 	log.C(ctx).Info("deleting all users in user resolver")
 
-	gqlUsers, err := r.Users(ctx, nil)
+	gqlUsers, err := r.getUsers(ctx)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete users, error %s when trying to get them", err.Error())
 		return nil, err
@@ -325,26 +251,38 @@ func (r *resolver) DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, e
 
 	url := r.restUrl + gql_constants.USER_PATH
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete all users, error %s when trying to make http request", err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request, error %s", err.Error())
-		return nil, &gqlerror.Error{
-			Message: err.Error(),
-		}
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete all users, error %s when trying to get http respose", err.Error())
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.uConverter.ManyFromGQLToDeleteUserPayload(gqlUsers.Data, true), nil
+	return r.uConverter.ManyFromGQLToDeleteUserPayload(gqlUsers, true), nil
+}
+
+func (r *resolver) getUsers(ctx context.Context) ([]*gql.User, error) {
+	log.C(ctx).Info("getting users without filters in user resolver")
+
+	url := r.restUrl + gql_constants.USER_PATH
+
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get users in user resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var users []*models.User
+	if err = json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.uConverter.ManyToGQL(users), nil
 }

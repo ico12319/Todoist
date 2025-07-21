@@ -6,34 +6,24 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/gql_constants"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 )
 
-//go:generate mockery --name=httpClient --output=./mocks --outpkg=mocks --filename=http_client.go --with-expecter=true
-type httpClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-//go:generate mockery --name=RequestAuthSetter --output=./mocks --outpkg=mocks --filename=request_auth_setter.go --with-expecter=true
-type requestAuthSetter interface {
-	DecorateRequest(context.Context, *http.Request) (*http.Request, error)
-}
-
+//go:generate mockery --name=jsonMarshaller --exported --output=./mocks --outpkg=mocks --filename=json_marshaller.go --with-expecter=true
 type jsonMarshaller interface {
 	Marshal(interface{}) ([]byte, error)
 }
 
-//go:generate mockery --name=HttpRequester --output=./mocks --outpkg=mocks --filename=http_requester.go --with-expecter=true
-type httpRequester interface {
-	NewRequestWithContext(context.Context, string, string, io.Reader) (*http.Request, error)
+type httpResponseGetter interface {
+	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
@@ -65,28 +55,24 @@ type todoConverter interface {
 }
 
 type resolver struct {
-	client         httpClient
 	lConverter     listConverter
 	uConverter     userConverter
 	tConverter     todoConverter
 	restUrl        string
 	factory        urlDecoratorFactory
-	authSetter     requestAuthSetter
-	jsonMarshaller jsonMarshaller
-	httpRequester  httpRequester
+	responseGetter httpResponseGetter
+	marshaller     jsonMarshaller
 }
 
-func NewResolver(client httpClient, lConverter listConverter, uConverter userConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, authSetter requestAuthSetter, jsonMarshaller jsonMarshaller, httpRequester httpRequester) *resolver {
+func NewResolver(lConverter listConverter, uConverter userConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, responseGetter httpResponseGetter, marshaller jsonMarshaller) *resolver {
 	return &resolver{
-		client:         client,
 		lConverter:     lConverter,
 		uConverter:     uConverter,
 		tConverter:     tConverter,
 		restUrl:        restUrl,
 		factory:        factory,
-		authSetter:     authSetter,
-		jsonMarshaller: jsonMarshaller,
-		httpRequester:  httpRequester,
+		responseGetter: responseGetter,
+		marshaller:     marshaller,
 	}
 }
 
@@ -101,32 +87,25 @@ func (r *resolver) Lists(ctx context.Context, filter *url_filters.BaseFilters) (
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get lists in list resolver, error %s when making request", err.Error())
-		return nil, fmt.Errorf("error when making http request")
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
+		return nil, err
 	}
+	defer resp.Body.Close()
 
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	response, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get lists in list resolver, error %s when trying to get response", err.Error())
-		return utils.InitEmptyListPage(), err
-	}
-	defer response.Body.Close()
-
-	listModels, err := utils.HandleHttpCode[[]*models.List](response)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get lists in list resolver, error %s when trying to decode JSON", err.Error())
-		return utils.InitEmptyListPage(), err
+	var lists []*models.List
+	if err = json.NewDecoder(resp.Body).Decode(&lists); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
 	}
 
-	gqlModels := r.lConverter.ManyToGQL(listModels)
+	gqlModels := r.lConverter.ManyToGQL(lists)
 
 	pageInfo := utils.InitPageInfo[*gql.List](gqlModels, func(list *gql.List) string {
 		return list.ID
@@ -145,37 +124,30 @@ func (r *resolver) List(ctx context.Context, id string) (*gql.List, error) {
 	formatedId := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedId
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get list with id %s, error when making request", err.Error())
-		return nil, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
 	}
+	defer resp.Body.Close()
 
-	response, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get list with id %s, error when trying to get response", err.Error())
-		return nil, fmt.Errorf("failed to fetch list response")
-	}
-	defer response.Body.Close()
-
-	listModel, err := utils.HandleHttpCode[*models.List](response)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", response.StatusCode)
-		return nil, err
-	}
-
-	if reflect.ValueOf(listModel).IsZero() {
-		log.C(ctx).Error("http status code not found received, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return r.lConverter.ToGQL(listModel), nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var list models.List
+	if err = json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.lConverter.ToGQL(&list), nil
 }
 
 func (r *resolver) ListOwner(ctx context.Context, obj *gql.List) (*gql.User, error) {
@@ -184,32 +156,25 @@ func (r *resolver) ListOwner(ctx context.Context, obj *gql.List) (*gql.User, err
 	formatedSuffix := fmt.Sprintf("/%s/owner", obj.ID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Error("failed to get list owner, error in list resolcer when making http request")
-		return nil, fmt.Errorf("error when making http request")
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
+		return nil, err
 	}
+	defer resp.Body.Close()
 
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	response, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Error("failed to get list owner, error in list resolver when trying to get http response")
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	owner, err := utils.HandleHttpCode[*models.User](response)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", response.StatusCode)
+	var owner models.User
+	if err = json.NewDecoder(resp.Body).Decode(&owner); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	return r.uConverter.ToGQL(owner), nil
+	return r.uConverter.ToGQL(&owner), nil
 }
 
 func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filters.TodoFilters) (*gql.TodoPage, error) {
@@ -220,35 +185,27 @@ func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filter
 	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.LISTS_PATH+formatedSuffix+gql_constants.TODO_PATH, filters)
 
 	url, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
-	log.C(ctx).Errorf("wrong url is %s", url)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list todos, error when calling factory function")
 		return utils.InitEmptyTodoPage(), err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get list's todos, error when making http request %s", err.Error())
-		return utils.InitEmptyTodoPage(), fmt.Errorf("error when making http request")
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
+		return nil, err
 	}
+	defer resp.Body.Close()
 
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	response, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get list's todos, error when trying to get http response %s", err.Error())
-		return utils.InitEmptyTodoPage(), err
-	}
-	defer response.Body.Close()
-
-	todos, err := utils.HandleHttpCode[[]*models.Todo](response)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", response.StatusCode)
-		return utils.InitEmptyTodoPage(), err
+	var todos []*models.Todo
+	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
 	}
 
 	gqlTodos := r.tConverter.ManyToGQL(todos)
@@ -283,28 +240,12 @@ func (r *resolver) DeleteList(ctx context.Context, id string) (*gql.DeleteListPa
 	formattedUrl := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedUrl
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete list with id %s, error when making http request %s", id, err.Error())
-		return &gql.DeleteListPayload{
-			Success: false,
-		}, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
 	}
-
-	response, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete list with id %s, error when trying to get http response %s", id, err.Error())
-		return &gql.DeleteListPayload{
-			Success: false,
-		}, fmt.Errorf("failed to fetch list response")
-	}
-	defer response.Body.Close()
+	defer resp.Body.Close()
 
 	return r.lConverter.FromGQLModelToDeleteListPayload(gqlList, true), nil
 }
@@ -317,43 +258,36 @@ func (r *resolver) UpdateList(ctx context.Context, id string, input gql.UpdateLi
 
 	restModel := r.lConverter.UpdateListInputGQLToHandlerModel(input)
 
-	jsonBody, err := r.jsonMarshaller.Marshal(restModel)
+	jsonBody, err := r.marshaller.Marshal(restModel)
 	if err != nil {
 		log.C(ctx).Errorf("failed to update list with id %s, error when trying to marshal rest model", id)
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		log.C(ctx).Errorf("failed to update list with id %s, error when making http request", id)
-		return nil, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to update list with id %s, error when trying to get http response", id)
-		return nil, fmt.Errorf("failed to fetch list response")
 	}
 	defer resp.Body.Close()
 
-	updatedList, err := utils.HandleHttpCode[*models.List](resp)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", resp.StatusCode)
-		return nil, err
-	}
-
-	if reflect.ValueOf(updatedList).IsZero() {
-		log.C(ctx).Infof("http status code not found received, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return nil, nil
 	}
 
-	return r.lConverter.ToGQL(updatedList), nil
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var updatedList models.List
+	if err = json.NewDecoder(resp.Body).Decode(&updatedList); err != nil {
+		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.lConverter.ToGQL(&updatedList), nil
 }
 
 func (r *resolver) AddListCollaborator(ctx context.Context, input gql.CollaboratorInput) (*gql.CreateCollaboratorPayload, error) {
@@ -364,7 +298,7 @@ func (r *resolver) AddListCollaborator(ctx context.Context, input gql.Collaborat
 
 	restModel := r.uConverter.FromCollaboratorInputToAddCollaboratorHandlerModel(&input)
 
-	jsonBody, err := r.jsonMarshaller.Marshal(restModel)
+	jsonBody, err := r.marshaller.Marshal(restModel)
 	if err != nil {
 		log.C(ctx).Errorf("failed to add collaborator, error when trying to matshal user")
 		return &gql.CreateCollaboratorPayload{
@@ -372,45 +306,34 @@ func (r *resolver) AddListCollaborator(ctx context.Context, input gql.Collaborat
 		}, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		log.C(ctx).Errorf("failed to add collaborator, error when making http request")
-		return &gql.CreateCollaboratorPayload{
-			Success: false,
-		}, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to add collaborator, error when trying to get http response")
-		return &gql.CreateCollaboratorPayload{
-			Success: false,
-		}, err
 	}
 	defer resp.Body.Close()
 
-	collaborator, err := utils.HandleHttpCode[*models.User](resp)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", resp.StatusCode)
-		return &gql.CreateCollaboratorPayload{
-			Success: false,
-		}, err
-	}
-
-	if reflect.ValueOf(collaborator).IsZero() {
-		log.C(ctx).Infof("http status code not found received, empty struct...")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Debugf("http status not found received...")
 		return &gql.CreateCollaboratorPayload{
 			Success: false,
 		}, nil
 	}
 
-	gqlUser := r.uConverter.ToGQL(collaborator)
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get lists in list resolver, error %s due to bad response status code", err.Error())
+		return &gql.CreateCollaboratorPayload{
+			Success: false,
+		}, err
+	}
+
+	var collaborator models.User
+	if err = json.NewDecoder(resp.Body).Decode(&collaborator); err != nil {
+		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
+		return nil, err
+	}
+
+	gqlUser := r.uConverter.ToGQL(&collaborator)
 
 	gqlList, err := r.List(ctx, input.ListID)
 	if err != nil {
@@ -433,23 +356,7 @@ func (r *resolver) DeleteListCollaborator(ctx context.Context, id string, userID
 	formattedSuffix := fmt.Sprintf("/%s%s/%s", id, gql_constants.COLLABORATOR_PATH, userID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete collaborator with id %s, error when making http request", userID)
-		return &gql.DeleteCollaboratorPayload{
-			ListID:  id,
-			UserID:  userID,
-			Success: false,
-		}, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
-		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete collaborator with id %s, error when trying to get http response", userID)
 		return &gql.DeleteCollaboratorPayload{
@@ -480,28 +387,21 @@ func (r *resolver) Collaborators(ctx context.Context, obj *gql.List, filters *ur
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.C(ctx).Error("failed to get list collaborators, error when make http request")
-		return nil, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
-		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Error("failed to get list collaborators, error when trying to get http response")
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	collaborators, err := utils.HandleHttpCode[[]*models.User](resp)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", resp.StatusCode)
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get collaborators in a list in list resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var collaborators []*models.User
+	if err = json.NewDecoder(resp.Body).Decode(&collaborators); err != nil {
+		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
 		return nil, err
 	}
 
@@ -525,38 +425,31 @@ func (r *resolver) CreateList(ctx context.Context, input gql.CreateListInput) (*
 
 	restModel := r.lConverter.CreateListInputGQLToHandlerModel(input)
 
-	jsonBody, err := r.jsonMarshaller.Marshal(restModel)
+	jsonBody, err := r.marshaller.Marshal(restModel)
 	if err != nil {
 		log.C(ctx).Errorf("failed to create list, error %s when trying to marshal json body", err.Error())
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		log.C(ctx).Errorf("failed to create user, error %s when making http requet", err.Error())
-		return nil, fmt.Errorf("error when making http request")
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("faield to decorate request auth header, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to create list, error %s when trying to get http response", err.Error())
-		return nil, fmt.Errorf("failed to fetch list response")
 	}
 	defer resp.Body.Close()
 
-	list, err := utils.HandleHttpCode[*models.List](resp)
-	if err != nil {
-		log.C(ctx).Errorf("bad http status code %d received when calling rest api", resp.StatusCode)
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to create list in list resolver, error %s due to bad response status code", err.Error())
 		return nil, err
 	}
 
-	return r.lConverter.ToGQL(list), nil
+	var list models.List
+	if err = json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.lConverter.ToGQL(&list), nil
 }
 
 func (r *resolver) DeleteLists(ctx context.Context) ([]*gql.DeleteListPayload, error) {
@@ -564,30 +457,44 @@ func (r *resolver) DeleteLists(ctx context.Context) ([]*gql.DeleteListPayload, e
 
 	url := r.restUrl + gql_constants.LISTS_PATH
 
-	gqlLists, err := r.Lists(ctx, nil)
+	gqlLists, err := r.getLists(ctx)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete lists, error %s when trying to get them", err.Error())
 		return nil, err
 	}
 
-	req, err := r.httpRequester.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete lists, error %s when trying to make http request", err.Error())
-		return nil, err
-	}
-
-	req, err = r.authSetter.DecorateRequest(ctx, req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to decorate http request, error %s", err.Error())
-		return nil, err
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to delete lists, error %s when trying to get http response", err.Error())
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.lConverter.ManyFromGQLModelToDeleteListPayload(gqlLists.Data, true), nil
+	return r.lConverter.ManyFromGQLModelToDeleteListPayload(gqlLists, true), nil
+}
+
+func (r *resolver) getLists(ctx context.Context) ([]*gql.List, error) {
+	log.C(ctx).Info("getting all lists without filters in list resolver")
+
+	url := r.restUrl + gql_constants.LISTS_PATH
+
+	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get lists in list resolver, error %s due to bad response status code", err.Error())
+		return nil, err
+	}
+
+	var lists []*models.List
+	if err = json.NewDecoder(resp.Body).Decode(&lists); err != nil {
+		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
+		return nil, err
+	}
+
+	return r.lConverter.ManyToGQL(lists), nil
 }

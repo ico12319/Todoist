@@ -9,6 +9,8 @@ const (
 	ASSIGNEE_PATH     = "/assignee"
 	REFRESH_PATH      = "/refresh"
 	TOKENS_PATH       = "/tokens"
+	RANDOM_PATH       = "/random"
+	ACTIVITIES_PATH   = "/activities"
 )
 
 const (
@@ -32,4 +34,6 @@ const (
 	LIMIT    = "limit"
 	STATUS   = "status"
 	PRIORITY = "priority"
+	TYPE     = "overdue"
+	ROLE     = "role"
 )

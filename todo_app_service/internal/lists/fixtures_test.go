@@ -1,97 +1,119 @@
 package lists
 
 import (
-	entities2 "Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/application_errors"
+	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/lists/mocks"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
-	models2 "Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
+	"Todo-List/internProject/todo_app_service/pkg/models"
+	"errors"
 	"fmt"
 	"github.com/gofrs/uuid"
 	"time"
 )
 
 const (
-	listName         = "listName"
-	newListName      = "changedListName"
-	dbError          = "database error"
-	userEmail        = "email@email.com"
-	userEmail2       = "email2@email.com"
-	userEmail3       = "email3@email.com"
-	adminRole        = "admin"
-	writerRole       = "writer"
-	readerRole       = "reader"
-	invalidUserEmail = "invalid@email.com"
-	sqlQueryGetList  = `SELECT id, name, created_at, last_updated, owner 
-						FROM lists where id = $1`
-	sqlQueryDeleteList = `DELETE FROM lists WHERE id = $1`
-	sqlQueryGetLists   = `SELECT id, name, created_at, last_updated, owner 
-						FROM lists`
-	sqlQueryUpdateListName           = `UPDATE lists SET name = $1 WHERE id = $2`
-	sqlQueryFindUserIdQuery          = `SELECT id FROM users WHERE email = $1`
-	sqlInsertIntoUserListsTableQuery = `INSERT INTO user_lists (user_id, list_id) VALUES ($1,$2)`
-	sqlQueryGetCollaborator          = `SELECT users.id,users.email,users.role FROM users
-						JOIN user_lists ON users.id = user_lists.user_id 
-                        WHERE list_id = $1`
-	sqlQueryInsertList = `INSERT INTO lists (id, name, created_at, last_updated, owner) 
-						VALUES (?,?,?,?,?)`
-	sqlQueryGetListOwner = `SELECT users.id,users.role,users.email FROM lists 
-    JOIN users ON lists.owner = users.id WHERE lists.id = $1`
+	VALID_LIST_ID    = "valid id"
+	INVALID_LIST_ID  = "invalid id"
+	INVALID_LIMIT    = "limit"
+	VALID_NAME       = "valid name"
+	DESCRIPTION      = "description"
+	VALID_LIST_ID2   = "valid id2"
+	VALID_OWNER_ID1  = "valid owner id1"
+	VALID_OWNER_ID2  = "valid owner id2"
+	INVALID_OWNER_ID = "invalid owner id"
 )
 
 var (
-	userId            = uuid.Must(uuid.NewV4())
-	userId2           = uuid.Must(uuid.NewV4())
-	userId3           = uuid.Must(uuid.NewV4())
-	existingListId    = uuid.Must(uuid.NewV4())
-	listId2           = uuid.Must(uuid.NewV4())
-	listId3           = uuid.Must(uuid.NewV4())
-	listId4           = uuid.Must(uuid.NewV4())
-	dummyListId       = uuid.Must(uuid.NewV4())
-	ownerId           = uuid.Must(uuid.NewV4())
-	dummyListOwner    = uuid.Must(uuid.NewV4())
-	nonExistingListId = uuid.Must(uuid.NewV4())
-	testDate          = time.Date(2021, time.January, 15, 10, 30, 0, 0, time.UTC)
-	testDate2         = time.Date(2025, time.January, 11, 6, 24, 2, 1, time.UTC)
-	// errors
-	invalidListIdError           = fmt.Errorf("invalid list_id %s", nonExistingListId.String())
-	nonExistingListIdError       = fmt.Errorf("invalid list_id %s", nonExistingListId.String())
-	databaseError                = fmt.Errorf(dbError)
-	invalidOwnerIdError          = fmt.Errorf("owner %s not found", ownerId.String())
-	alreadyExistingListNameError = fmt.Errorf("a list with name %s already exists", listName)
-	invalidUserEmailError        = fmt.Errorf("invalid email provided %s", userEmail)
+	createdAt                    = time.Date(2021, time.January, 15, 10, 30, 0, 0, time.UTC)
+	lastUpdate                   = time.Date(2025, time.January, 15, 17, 30, 0, 0, time.UTC)
+	dbError                      = errors.New("db error")
+	serviceErrorWhenDeletingList = fmt.Errorf("failed to delete list with id %s", INVALID_LIST_ID)
+	mockQuery                    = `SELECT id,name,created_at,last_updated,owner,description FROM (SELECT * FROM lists ORDER BY id)`
+	listEntities                 = []entities.List{
+		initListEntity(VALID_LIST_ID, "name1", "description1", createdAt, lastUpdate, VALID_OWNER_ID1),
+		initListEntity(VALID_LIST_ID2, "name2", "description2", createdAt, lastUpdate, VALID_OWNER_ID2),
+	}
+
+	modelLists = []*models.List{
+		initModelList(VALID_LIST_ID, "name1", "description1", createdAt, lastUpdate, VALID_OWNER_ID1),
+		initModelList(VALID_LIST_ID2, "name2", "description2", createdAt, lastUpdate, VALID_OWNER_ID2),
+	}
+
+	invalidLimitError = fmt.Errorf("invalid limit provided %s", INVALID_LIMIT)
+
+	validHandlerModel = initHandlerModel(VALID_NAME, DESCRIPTION)
+
+	convertedModel = &models.List{
+		Name:        VALID_NAME,
+		Description: DESCRIPTION,
+	}
+
+	returnedListUuid = "returned uuid"
+
+	constructedModelListByService = initModelList(returnedListUuid, VALID_NAME, DESCRIPTION, createdAt, lastUpdate, VALID_OWNER_ID1)
+
+	returnedEntityListByListConverterFromModel = initListEntity(returnedListUuid, VALID_NAME, DESCRIPTION, createdAt, lastUpdate, VALID_OWNER_ID1)
+
+	constructedModelListByServiceWithInvalidOwnerId = initModelList(returnedListUuid, VALID_NAME, DESCRIPTION, createdAt, lastUpdate, INVALID_OWNER_ID)
+
+	returnedEntityListByListConverterFromModelWithInvalidOwnerID = initListEntity(returnedListUuid, VALID_NAME, DESCRIPTION, createdAt, lastUpdate, INVALID_OWNER_ID)
+
+	errorWhenTryingToConstructModelListWithInvalidOwnerId = application_errors.NewNotFoundError(constants.USER_TARGET, INVALID_OWNER_ID)
+
+	errorWnTryingToConstructModelListWithAlreadyExistingName = application_errors.NewAlreadyExistError(constants.LIST_TARGET, VALID_NAME)
 )
 
-func initEntityList(listId uuid.UUID, name string, createdAt time.Time, lastUpdated time.Time, owner uuid.UUID) *entities2.List {
-	return &entities2.List{
-		Id:          listId,
+func initModelList(id string, name string, description string, createdAt time.Time, lastUpdate time.Time, ownerId string) *models.List {
+	return &models.List{
+		Id:          id,
 		Name:        name,
+		Description: description,
 		CreatedAt:   createdAt,
-		LastUpdated: lastUpdated,
-		Owner:       owner,
+		LastUpdated: lastUpdate,
+		Owner:       ownerId,
 	}
 }
 
-func initEntityUser(userId uuid.UUID, email string, role string) *entities2.User {
-	return &entities2.User{
-		Id:    userId,
-		Email: email,
-		Role:  role,
-	}
-}
-
-func initModelUser(userId string, email string, role string) *models2.User {
-	return &models2.User{
-		Id:    userId,
-		Email: email,
-		Role:  constants.UserRole(role),
-	}
-}
-
-func initModelList(listId string, name string, createdAt time.Time, lastUpdated time.Time, owner string) *models2.List {
-	return &models2.List{
-		Id:          listId,
+func initListEntity(id string, name string, description string, createdAt time.Time, lastUpdate time.Time, ownerId string) entities.List {
+	return entities.List{
+		Id:          uuid.FromStringOrNil(id),
 		Name:        name,
+		Description: description,
 		CreatedAt:   createdAt,
-		LastUpdated: lastUpdated,
-		Owner:       owner,
+		LastUpdated: lastUpdate,
+		Owner:       uuid.FromStringOrNil(ownerId),
 	}
+}
+
+func initHandlerModel(name string, description string) *handler_models.CreateList {
+	return &handler_models.CreateList{
+		Name:        name,
+		Description: description,
+	}
+}
+
+func initUuidGeneratorMock() *mocks.UuidGenerator {
+	mUuidGen := &mocks.UuidGenerator{}
+
+	mUuidGen.EXPECT().
+		Generate().
+		Return(returnedListUuid).Once()
+
+	return mUuidGen
+}
+
+func initTimeGenMock() *mocks.TimeGenerator {
+	mTimeGen := &mocks.TimeGenerator{}
+
+	mTimeGen.EXPECT().
+		Now().
+		Return(createdAt).Once()
+
+	mTimeGen.EXPECT().
+		Now().
+		Return(lastUpdate).Once()
+
+	return mTimeGen
 }

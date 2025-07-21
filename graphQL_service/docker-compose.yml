@@ -29,14 +29,14 @@ services:
     restart: on-failure
 
   rest_api:
-    image: todo_rest_api:latest
+    image: hristo12319/todo_rest_api:latest
     depends_on:
       - migrate
     ports:
       - ${REST_PORT}:${REST_PORT}
 
   graphql_api:
-    image: todo_graphql_api:latest
+    image: hristo12319/todo_graphql_api:latest
     environment:
       TODO_REST_API_URL: ${TODO_REST_API_URL}
     depends_on:

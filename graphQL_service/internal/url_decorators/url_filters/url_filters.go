@@ -2,6 +2,7 @@ package url_filters
 
 import (
 	gql "Todo-List/internProject/graphQL_service/graph/model"
+	"Todo-List/internProject/graphQL_service/internal/gql_constants"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"bytes"
 )
@@ -13,8 +14,8 @@ type BaseFilters struct {
 
 func (b *BaseFilters) GetFilters() map[string]*string {
 	return map[string]*string{
-		constants.LIMIT:  b.Limit,
-		constants.CURSOR: b.Cursor,
+		gql_constants.LIMIT:  b.Limit,
+		gql_constants.CURSOR: b.Cursor,
 	}
 }
 
@@ -25,13 +26,42 @@ type TodoFilters struct {
 
 func (t *TodoFilters) GetFilters() map[string]*string {
 	pr, st := extractPriorityAndStatus(t.TodoFilters)
+	todoType := extractType(t.TodoFilters)
 
 	return map[string]*string{
-		constants.LIMIT:    t.BaseFilters.Limit,
-		constants.CURSOR:   t.BaseFilters.Cursor,
-		constants.PRIORITY: pr,
-		constants.STATUS:   st,
+		gql_constants.LIMIT:    t.BaseFilters.Limit,
+		gql_constants.CURSOR:   t.BaseFilters.Cursor,
+		gql_constants.PRIORITY: pr,
+		gql_constants.STATUS:   st,
+		gql_constants.TYPE:     todoType,
 	}
+}
+
+type UserFilters struct {
+	BaseFilters
+	UserFilters *gql.UserRoleFilter
+}
+
+func (u *UserFilters) GetFilters() map[string]*string {
+	role := extractUserRole(u.UserFilters)
+
+	return map[string]*string{
+		gql_constants.LIMIT:  u.BaseFilters.Limit,
+		gql_constants.CURSOR: u.BaseFilters.Cursor,
+		gql_constants.ROLE:   role,
+	}
+}
+
+func extractUserRole(filters *gql.UserRoleFilter) *string {
+	var role *string
+
+	if filters != nil {
+		if filters.Role != nil {
+			role = fromStringPointerToLowerStringPointer((*string)(filters.Role))
+		}
+	}
+
+	return role
 }
 
 func fromStringPointerToLowerStringPointer(ptr *string) *string {
@@ -56,4 +86,21 @@ func extractPriorityAndStatus(todoFilters *gql.TodosFilterInput) (*string, *stri
 	}
 
 	return pr, st
+}
+
+func extractType(todoFilters *gql.TodosFilterInput) *string {
+	trueValue := constants.TRUE_VALUE
+	falseValue := constants.FALSE_VALUE
+
+	var todoType *string
+	if todoFilters != nil {
+		if todoFilters.Type != nil {
+			if string(*todoFilters.Type) == constants.EXPIRED {
+				todoType = &trueValue
+			} else {
+				todoType = &falseValue
+			}
+		}
+	}
+	return todoType
 }

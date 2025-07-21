@@ -2,7 +2,6 @@ package middlewares
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
@@ -12,29 +11,24 @@ import (
 	"net/http"
 )
 
-type TodoService interface {
+type tService interface {
 	GetTodoRecord(context.Context, string) (*models.Todo, error)
 	GetTodoAssigneeToRecord(context.Context, string) (*models.User, error)
 }
 
-type listService interface {
+type lService interface {
 	GetListOwnerRecord(context.Context, string) (*models.User, error)
 	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
 }
 
-type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(ctx context.Context, w http.ResponseWriter, err error) status_code_encoders.StatusCodeEncoder
-}
-
 type todoModifyMiddleware struct {
 	next        http.Handler
-	todoService TodoService
-	lService    listService
-	factory     statusCodeEncoderFactory
+	todoService tService
+	lService    lService
 }
 
-func newTodoModifyMiddleware(next http.Handler, service TodoService, lService listService, factory statusCodeEncoderFactory) *todoModifyMiddleware {
-	return &todoModifyMiddleware{next: next, todoService: service, lService: lService, factory: factory}
+func newTodoModifyMiddleware(next http.Handler, service tService, lService lService) *todoModifyMiddleware {
+	return &todoModifyMiddleware{next: next, todoService: service, lService: lService}
 }
 
 func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -55,8 +49,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todo record, error %s when trying to get it", err.Error())
 
-		encoder := t.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -64,12 +57,10 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list owner of list with id %s", err.Error(), todo.ListId)
 
-		encoder := t.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
-	//TODO add filters
 	collaborators, err := t.lService.GetCollaborators(ctx, &filters.ListFilters{
 		ListId: todo.ListId,
 	})
@@ -77,8 +68,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s collaborators", err.Error(), todo.ListId)
 
-		encoder := t.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -86,8 +76,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("faield to serve http, error %s when trying to get todo assingee", err.Error())
 
-		encoder := t.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -102,9 +91,9 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	t.next.ServeHTTP(w, r)
 }
 
-func NewTodoModifyMiddlewareFunc(todoService TodoService, listService listService, factory statusCodeEncoderFactory) mux.MiddlewareFunc {
+func NewTodoModifyMiddlewareFunc(todoService tService, listService lService) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
-		return newTodoModifyMiddleware(next, todoService, listService, factory)
+		return newTodoModifyMiddleware(next, todoService, listService)
 	}
 }
 

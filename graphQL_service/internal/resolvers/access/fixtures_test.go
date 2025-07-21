@@ -32,6 +32,7 @@ var (
 		Message:    "Internal error, please try again later.",
 		Extensions: map[string]interface{}{"code": "INTERNAL_SERVER_ERROR"},
 	}
+	responseError = errors.New("error when trying to get http response")
 )
 
 func initRefreshInput() *gql.RefreshTokenInput {

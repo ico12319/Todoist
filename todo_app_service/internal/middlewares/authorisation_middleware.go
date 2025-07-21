@@ -3,8 +3,8 @@ package middlewares
 import (
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"Todo-List/internProject/todo_app_service/pkg/models"
-	"Todo-List/internProject/todo_app_service/pkg/tokens"
 	"context"
 	"github.com/gorilla/mux"
 	"net/http"
@@ -19,7 +19,7 @@ type UserService interface {
 }
 
 type jwtParser interface {
-	ParseJWT(context.Context, string) (*tokens.Claims, error)
+	ParseJWT(context.Context, string) (*jwt.Claims, error)
 }
 
 type authorisationMiddleware struct {

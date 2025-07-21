@@ -1,4 +1,4 @@
-package log
+package configuration
 
 import (
 	"fmt"
@@ -6,12 +6,12 @@ import (
 )
 
 type databaseConfig struct {
-	Port     string `envconfig:"DB_PORT"`
-	User     string `envconfig:"DB_USER"`
-	Password string `envconfig:"DB_PASS"`
-	Host     string `envconfig:"DB_HOST"`
-	Name     string `envconfig:"DB_NAME"`
-	SslMode  string `envconfig:"DB_SSLMODE"`
+	Port     string `envconfig:"POSTGRES_PORT" default:"5432"`
+	User     string `envconfig:"POSTGRES_USER"`
+	Password string `envconfig:"POSTGRES_PASSWORD"`
+	Host     string `envconfig:"POSTGRES_HOST" default:"db"`
+	Name     string `envconfig:"POSTGRES_DB"`
+	SslMode  string `envconfig:"POSTGRES_SSLMODE" default:"disable"`
 }
 
 func OpenPostgres(cfg databaseConfig) *sqlx.DB {

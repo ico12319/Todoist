@@ -1,7 +1,7 @@
 package middlewares
 
 import (
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"

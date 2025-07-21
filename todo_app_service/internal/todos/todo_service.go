@@ -4,7 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
@@ -189,7 +189,16 @@ func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*
 func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) ([]*models.Todo, error) {
 	log.C(ctx).Info("getting todos in todo service")
 
-	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseTodoGetQuery)
+	// this is just the base part of the sql query,
+	//the decorator decorates it and pass the already decorated query to the repo layer
+	//where the actual execution happens
+
+	baseQuery := `WITH sorted_todos AS(
+		SELECT * FROM todos ORDER BY id
+	)
+	SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM sorted_todos`
+
+	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos, error when calling factory function")
 		return nil, err
@@ -212,7 +221,12 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 		return nil, err
 	}
 
-	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseTodoGetByListIdQuery)
+	baseQuery := `WITH sorted_todos AS(
+					SELECT * FROM todos ORDER BY id
+                 )
+				SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM sorted_todos WHERE list_id = $1`
+
+	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when creating query decorator", listId)
 		return nil, err

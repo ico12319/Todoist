@@ -18,19 +18,18 @@ type userRoleKey struct {
 
 var UserRoleKey = userRoleKey{}
 
-type ListService interface {
+type listService interface {
 	GetListRecord(context.Context, string) (*models.List, error)
 	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
 }
 
 type listModifyMiddleware struct {
-	next    http.Handler
-	serv    ListService
-	factory statusCodeEncoderFactory
+	next http.Handler
+	serv listService
 }
 
-func newListAccessMiddleware(next http.Handler, serv ListService, factory statusCodeEncoderFactory) *listModifyMiddleware {
-	return &listModifyMiddleware{next: next, serv: serv, factory: factory}
+func newListAccessMiddleware(next http.Handler, serv listService) *listModifyMiddleware {
+	return &listModifyMiddleware{next: next, serv: serv}
 }
 
 func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -53,8 +52,7 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s", err.Error(), list)
 
-		encoder := a.factory.CreateStatusCodeEncoder(ctx, w, err)
-		encoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -87,9 +85,9 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	utils.EncodeError(w, "access forbidden: only administrators, collaborators or the list creator, may create/modify list related entity", http.StatusForbidden)
 }
 
-func ListAccessPermissionMiddlewareFunc(serv ListService, facotry statusCodeEncoderFactory) mux.MiddlewareFunc {
+func ListAccessPermissionMiddlewareFunc(serv listService) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
-		return newListAccessMiddleware(next, serv, facotry)
+		return newListAccessMiddleware(next, serv)
 	}
 }
 

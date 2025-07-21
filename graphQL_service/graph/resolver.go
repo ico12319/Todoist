@@ -41,21 +41,32 @@ type uResolver interface {
 	User(ctx context.Context, id string) (*gql.User, error)
 	DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPayload, error)
 	DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, error)
-	AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.BaseFilters) (*gql.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error)
+	AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.TodoFilters) (*gql.TodoPage, error)
+	ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.UserFilters) (*gql.ListPage, error)
 }
 
 type aResolver interface {
 	ExchangeRefreshToken(ctx context.Context, input gql.RefreshTokenInput) (*gql.Access, error)
 }
 
-type Resolver struct {
-	lResolver lResolver
-	tResolver tResolver
-	uResolver uResolver
-	aResolver aResolver
+type activityResolver interface {
+	RandomActivity(ctx context.Context) (*gql.RandomActivity, error)
 }
 
-func NewResolver(lResolver lResolver, tResolver tResolver, uResolver uResolver, aResolver aResolver) *Resolver {
-	return &Resolver{lResolver: lResolver, tResolver: tResolver, uResolver: uResolver, aResolver: aResolver}
+type Resolver struct {
+	lResolver        lResolver
+	tResolver        tResolver
+	uResolver        uResolver
+	aResolver        aResolver
+	activityResolver activityResolver
+}
+
+func NewResolver(lResolver lResolver, tResolver tResolver, uResolver uResolver, aResolver aResolver, activityResolver activityResolver) *Resolver {
+	return &Resolver{
+		lResolver:        lResolver,
+		tResolver:        tResolver,
+		uResolver:        uResolver,
+		aResolver:        aResolver,
+		activityResolver: activityResolver,
+	}
 }

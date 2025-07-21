@@ -3,9 +3,8 @@ package users
 import (
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/internal/status_code_encoders"
 	"Todo-List/internProject/todo_app_service/internal/utils"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
@@ -18,26 +17,21 @@ type userService interface {
 	GetUserRecord(ctx context.Context, userId string) (*models.User, error)
 	DeleteUserRecord(ctx context.Context, id string) error
 	DeleteUsers(ctx context.Context) error
-	GetUserListsRecords(ctx context.Context, uFilter *filters.UserFilters) ([]*models.List, error)
-	GetTodosAssignedToUser(ctx context.Context, userFilters *filters.UserFilters) ([]*models.Todo, error)
+	GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) ([]*models.List, error)
+	GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) ([]*models.Todo, error)
 }
 
 type fieldsValidator interface {
 	Struct(st interface{}) error
 }
 
-type statusCodeEncoderFactory interface {
-	CreateStatusCodeEncoder(ctx context.Context, w http.ResponseWriter, err error) status_code_encoders.StatusCodeEncoder
-}
-
 type handler struct {
 	service    userService
 	fValidator fieldsValidator
-	factory    statusCodeEncoderFactory
 }
 
-func NewHandler(service userService, fValidator fieldsValidator, factory statusCodeEncoderFactory) *handler {
-	return &handler{service: service, fValidator: fValidator, factory: factory}
+func NewHandler(service userService, fValidator fieldsValidator) *handler {
+	return &handler{service: service, fValidator: fValidator}
 }
 
 func (h *handler) HandleGetUser(w http.ResponseWriter, r *http.Request) {
@@ -55,8 +49,7 @@ func (h *handler) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.C(ctx).Errorf("failed to get user from user handler due to %s", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -140,21 +133,23 @@ func (h *handler) HandleGetUserLists(w http.ResponseWriter, r *http.Request) {
 
 	limit := utils.GetLimitFromUrl(r)
 	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+	role := utils.GetContentFromUrl(r, constants.ROLE)
+	ownerId, participantId := determineRole(role, userId)
 
 	uFilters := &filters.UserFilters{
 		BaseFilters: filters.BaseFilters{
 			Limit:  limit,
 			Cursor: cursor,
 		},
-		UserId: userId,
+		OwnerId:       ownerId,
+		ParticipantId: participantId,
 	}
 
-	lists, err := h.service.GetUserListsRecords(ctx, uFilters)
+	lists, err := h.service.GetUserListsRecords(ctx, userId, uFilters)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error %s when calling user service", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -183,15 +178,13 @@ func (h *handler) HandleGetTodosAssignedToUser(w http.ResponseWriter, r *http.Re
 			Limit:  limit,
 			Cursor: cursor,
 		},
-		UserId: userId,
 	}
 
-	modelTodos, err := h.service.GetTodosAssignedToUser(ctx, userFilters)
+	modelTodos, err := h.service.GetTodosAssignedToUser(ctx, userId, userFilters)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos assigned to user, error %s when calling todo service", err.Error())
 
-		statusCodeEncoder := h.factory.CreateStatusCodeEncoder(ctx, w, err)
-		statusCodeEncoder.EncodeErrorWithCorrectStatusCode(ctx, w)
+		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
@@ -200,4 +193,20 @@ func (h *handler) HandleGetTodosAssignedToUser(w http.ResponseWriter, r *http.Re
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func determineRole(role string, userId string) (string, string) {
+	var ownerId string
+	var participantId string
+
+	if len(role) == 0 {
+		ownerId = userId
+		participantId = userId
+	} else if role == constants.OWNER_ROLE {
+		ownerId = userId
+	} else if role == constants.PARTICIPANT_ROLE {
+		participantId = userId
+	}
+
+	return ownerId, participantId
 }

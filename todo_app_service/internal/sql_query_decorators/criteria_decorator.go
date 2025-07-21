@@ -1,23 +1,23 @@
 package sql_query_decorators
 
 import (
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
 	"fmt"
 )
 
 // concrete decorator!
-type allTodosByCriteriaDecorator struct {
+type criteriaDecorator struct {
 	retriever      SqlQueryRetriever
 	condition      string
 	conditionValue string
 }
 
-func NewCriteriaDecorator(retriever SqlQueryRetriever, condition string, conditionValue string) SqlQueryRetriever {
-	return &allTodosByCriteriaDecorator{retriever: retriever, condition: condition, conditionValue: conditionValue}
+func NewCriteriaDecorator(retriever SqlQueryRetriever, condition string, conditionValue string) *criteriaDecorator {
+	return &criteriaDecorator{retriever: retriever, condition: condition, conditionValue: conditionValue}
 }
 
-func (a *allTodosByCriteriaDecorator) DetermineCorrectSqlQuery(ctx context.Context) string {
+func (a *criteriaDecorator) DetermineCorrectSqlQuery(ctx context.Context) string {
 	log.C(ctx).Debugf("getting todos by criteria %s in all todos by priority retriever", a.conditionValue)
 
 	currentQuery := a.retriever.DetermineCorrectSqlQuery(ctx)

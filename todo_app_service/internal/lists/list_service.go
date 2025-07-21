@@ -4,18 +4,19 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
+	"fmt"
 	"time"
 )
 
-//go:generate mockery --name=ListRepo --output=./mocks --outpkg=mocks --filename=list_repo.go --with-expecter=true
+//go:generate mockery --name=listRepo --exported --output=./mocks --outpkg=mocks --filename=list_repo.go --with-expecter=true
 type listRepo interface {
-	GetLists(context.Context, sqlQueryRetriever) ([]entities.List, error)
+	GetLists(context.Context, sql_query_decorators.SqlQueryRetriever) ([]entities.List, error)
 	GetList(context.Context, string) (*entities.List, error)
-	GetListCollaborators(context.Context, sqlQueryRetriever) ([]entities.User, error)
+	GetListCollaborators(context.Context, sql_query_decorators.SqlQueryRetriever) ([]entities.User, error)
 	GetListOwner(context.Context, string) (*entities.User, error)
 	DeleteList(context.Context, string) error
 	DeleteLists(context.Context) error
@@ -26,17 +27,17 @@ type listRepo interface {
 	CheckWhetherUserIsCollaborator(context.Context, string, string) (bool, error)
 }
 
-//go:generate mockery --name=IUuidGenerator --output=./mocks --outpkg=mocks --filename=iuuid_generator.go --with-expecter=true
+//go:generate mockery --name=uuidGenerator --exported --output=./mocks --outpkg=mocks --filename=uuid_generator.go --with-expecter=true
 type uuidGenerator interface {
 	Generate() string
 }
 
-//go:generate mockery --name=ITimeGenerator --output=./mocks --outpkg=mocks --filename=itime_generator.go --with-expecter=true
+//go:generate mockery --name=timeGenerator --exported --output=./mocks --outpkg=mocks --filename=time_generator.go --with-expecter=true
 type timeGenerator interface {
 	Now() time.Time
 }
 
-//go:generate mockery --name=IListConverter --output=./mocks --outpkg=mocks --filename=ilist_converter.go --with-expecter=true
+//go:generate mockery --name=listConverter --exported --output=./mocks --outpkg=mocks --filename=list_converter.go --with-expecter=true
 type listConverter interface {
 	ConvertFromDBEntityToModel(*entities.List) *models.List
 	ConvertFromModelToDBEntity(*models.List) *entities.List
@@ -45,17 +46,19 @@ type listConverter interface {
 	FromCreateHandlerModelToModel(*handler_models.CreateList) *models.List
 }
 
-//go:generate mockery --name=IUserConverter --output=./mocks --outpkg=mocks --filename=iuser_converter.go --with-expecter=true
+//go:generate mockery --name=userConverter --exported --output=./mocks --outpkg=mocks --filename=user_converter.go --with-expecter=true
 type userConverter interface {
 	ConvertFromDBEntityToModel(*entities.User) *models.User
 	ConvertFromModelToEntity(*models.User) *entities.User
 	ManyToModel([]entities.User) []*models.User
 }
 
+//go:generate mockery --name=userService --exported --output=./mocks --outpkg=mocks --filename=user_service.go --with-expecter=true
 type userService interface {
 	GetUserRecord(context.Context, string) (*models.User, error)
 }
 
+//go:generate mockery --name=sqlDecoratorFactory --exported --output=./mocks --outpkg=mocks --filename=sql_decorator_factory.go --with-expecter=true
 type sqlDecoratorFactory interface {
 	CreateSqlDecorator(context.Context, sql_query_decorators.Filters, string) (sql_query_decorators.SqlQueryRetriever, error)
 }
@@ -79,7 +82,9 @@ func NewService(repo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
 func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.ListFilters) ([]*models.List, error) {
 	log.C(ctx).Info("getting lists from list service")
 
-	retriever, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseListGetQuery)
+	baseQuery := `SELECT id,name,created_at,last_updated,owner,description FROM (SELECT * FROM lists ORDER BY id)`
+
+	retriever, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseQuery)
 	if err != nil {
 		log.C(ctx).Error("failed to determine sql query, error when calling decorator factory")
 		return nil, err
@@ -99,7 +104,7 @@ func (s *service) DeleteListRecord(ctx context.Context, listId string) error {
 
 	if err := s.lRepo.DeleteList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to delete list with id %s, error %s when calling list repo", listId, err.Error())
-		return err
+		return fmt.Errorf("failed to delete list with id %s", listId)
 	}
 	return nil
 }
@@ -120,13 +125,12 @@ func (s *service) CreateListRecord(ctx context.Context, list *handler_models.Cre
 
 	convertedEntity := s.lConverter.ConvertFromModelToDBEntity(newlyCreatedList)
 
-	resEntity, err := s.lRepo.CreateList(ctx, convertedEntity)
-	if err != nil {
+	if _, err := s.lRepo.CreateList(ctx, convertedEntity); err != nil {
 		log.C(ctx).Errorf("failed to create list, error %s when calling list repo", err.Error())
 		return nil, err
 	}
 
-	return s.lConverter.ConvertFromDBEntityToModel(resEntity), nil
+	return newlyCreatedList, nil
 }
 
 func (s *service) UpdateListPartiallyRecord(ctx context.Context, listId string, list *handler_models.UpdateList) (*models.List, error) {

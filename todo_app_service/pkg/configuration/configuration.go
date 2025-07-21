@@ -1,4 +1,4 @@
-package log
+package configuration
 
 import (
 	"context"
@@ -13,12 +13,13 @@ import (
 // config is implemented with singleton design pattern so we can share state!
 
 type Config struct {
-	DbConfig    databaseConfig
-	LogConfig   logConfig
-	RestConfig  restConfig
-	GraphConfig graphQlServerConfig
-	OauthConfig *oauth2.Config
-	JwtConfig   jwtConfig
+	DbConfig       databaseConfig
+	LogConfig      logConfig
+	RestConfig     restConfig
+	GraphConfig    graphQlServerConfig
+	OauthConfig    *oauth2.Config
+	JwtConfig      jwtConfig
+	ActivityConfig activityConfig
 }
 
 var (
@@ -71,6 +72,10 @@ func init() {
 	}
 
 	if err = envconfig.Process("", &config.JwtConfig); err != nil {
+		panic(err)
+	}
+
+	if err = envconfig.Process("", &config.ActivityConfig); err != nil {
 		panic(err)
 	}
 }

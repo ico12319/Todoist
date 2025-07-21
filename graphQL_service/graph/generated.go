@@ -105,7 +105,7 @@ type ComplexityRoot struct {
 		LastUpdated   func(childComplexity int) int
 		Name          func(childComplexity int) int
 		Owner         func(childComplexity int) int
-		Todos         func(childComplexity int, limit *int32, after *string, criteria *model.TodosFilterInput) int
+		Todos         func(childComplexity int, filter *model.TodosFilterInput, limit *int32, after *string) int
 	}
 
 	ListPage struct {
@@ -137,12 +137,20 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		List  func(childComplexity int, id string) int
-		Lists func(childComplexity int, limit *int32, after *string) int
-		Todo  func(childComplexity int, id string) int
-		Todos func(childComplexity int, limit *int32, after *string, criteria *model.TodosFilterInput) int
-		User  func(childComplexity int, id string) int
-		Users func(childComplexity int, limit *int32, after *string) int
+		List           func(childComplexity int, id string) int
+		Lists          func(childComplexity int, limit *int32, after *string) int
+		RandomActivity func(childComplexity int) int
+		Todo           func(childComplexity int, id string) int
+		Todos          func(childComplexity int, limit *int32, after *string, criteria *model.TodosFilterInput) int
+		User           func(childComplexity int, id string) int
+		Users          func(childComplexity int, limit *int32, after *string) int
+	}
+
+	RandomActivity struct {
+		Activity     func(childComplexity int) int
+		KidFriendly  func(childComplexity int) int
+		Participants func(childComplexity int) int
+		Type         func(childComplexity int) int
 	}
 
 	Todo struct {
@@ -165,10 +173,10 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
-		AssignedTo    func(childComplexity int, limit *int32, after *string) int
+		AssignedTo    func(childComplexity int, filter *model.TodosFilterInput, limit *int32, after *string) int
 		Email         func(childComplexity int) int
 		ID            func(childComplexity int) int
-		ParticipateIn func(childComplexity int, limit *int32, after *string) int
+		ParticipateIn func(childComplexity int, filter *model.UserRoleFilter, limit *int32, after *string) int
 		Role          func(childComplexity int) int
 	}
 
@@ -181,7 +189,7 @@ type ComplexityRoot struct {
 
 type ListResolver interface {
 	Owner(ctx context.Context, obj *model.List) (*model.User, error)
-	Todos(ctx context.Context, obj *model.List, limit *int32, after *string, criteria *model.TodosFilterInput) (*model.TodoPage, error)
+	Todos(ctx context.Context, obj *model.List, filter *model.TodosFilterInput, limit *int32, after *string) (*model.TodoPage, error)
 	Collaborators(ctx context.Context, obj *model.List, limit *int32, after *string) (*model.UserPage, error)
 }
 type MutationResolver interface {
@@ -207,6 +215,7 @@ type QueryResolver interface {
 	Todo(ctx context.Context, id string) (*model.Todo, error)
 	Users(ctx context.Context, limit *int32, after *string) (*model.UserPage, error)
 	User(ctx context.Context, id string) (*model.User, error)
+	RandomActivity(ctx context.Context) (*model.RandomActivity, error)
 }
 type TodoResolver interface {
 	List(ctx context.Context, obj *model.Todo) (*model.List, error)
@@ -214,8 +223,8 @@ type TodoResolver interface {
 	AssignedTo(ctx context.Context, obj *model.Todo) (*model.User, error)
 }
 type UserResolver interface {
-	AssignedTo(ctx context.Context, obj *model.User, limit *int32, after *string) (*model.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *model.User, limit *int32, after *string) (*model.ListPage, error)
+	AssignedTo(ctx context.Context, obj *model.User, filter *model.TodosFilterInput, limit *int32, after *string) (*model.TodoPage, error)
+	ParticipateIn(ctx context.Context, obj *model.User, filter *model.UserRoleFilter, limit *int32, after *string) (*model.ListPage, error)
 }
 
 type executableSchema struct {
@@ -490,7 +499,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.List.Todos(childComplexity, args["limit"].(*int32), args["after"].(*string), args["criteria"].(*model.TodosFilterInput)), true
+		return e.complexity.List.Todos(childComplexity, args["filter"].(*model.TodosFilterInput), args["limit"].(*int32), args["after"].(*string)), true
 
 	case "ListPage.data":
 		if e.complexity.ListPage.Data == nil {
@@ -704,6 +713,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Lists(childComplexity, args["limit"].(*int32), args["after"].(*string)), true
 
+	case "Query.randomActivity":
+		if e.complexity.Query.RandomActivity == nil {
+			break
+		}
+
+		return e.complexity.Query.RandomActivity(childComplexity), true
+
 	case "Query.todo":
 		if e.complexity.Query.Todo == nil {
 			break
@@ -751,6 +767,34 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Users(childComplexity, args["limit"].(*int32), args["after"].(*string)), true
+
+	case "RandomActivity.activity":
+		if e.complexity.RandomActivity.Activity == nil {
+			break
+		}
+
+		return e.complexity.RandomActivity.Activity(childComplexity), true
+
+	case "RandomActivity.kidFriendly":
+		if e.complexity.RandomActivity.KidFriendly == nil {
+			break
+		}
+
+		return e.complexity.RandomActivity.KidFriendly(childComplexity), true
+
+	case "RandomActivity.participants":
+		if e.complexity.RandomActivity.Participants == nil {
+			break
+		}
+
+		return e.complexity.RandomActivity.Participants(childComplexity), true
+
+	case "RandomActivity.type":
+		if e.complexity.RandomActivity.Type == nil {
+			break
+		}
+
+		return e.complexity.RandomActivity.Type(childComplexity), true
 
 	case "Todo.assigned_to":
 		if e.complexity.Todo.AssignedTo == nil {
@@ -853,7 +897,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.User.AssignedTo(childComplexity, args["limit"].(*int32), args["after"].(*string)), true
+		return e.complexity.User.AssignedTo(childComplexity, args["filter"].(*model.TodosFilterInput), args["limit"].(*int32), args["after"].(*string)), true
 
 	case "User.email":
 		if e.complexity.User.Email == nil {
@@ -879,7 +923,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.User.ParticipateIn(childComplexity, args["limit"].(*int32), args["after"].(*string)), true
+		return e.complexity.User.ParticipateIn(childComplexity, args["filter"].(*model.UserRoleFilter), args["limit"].(*int32), args["after"].(*string)), true
 
 	case "User.role":
 		if e.complexity.User.Role == nil {
@@ -924,6 +968,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputTodosFilterInput,
 		ec.unmarshalInputUpdateListInput,
 		ec.unmarshalInputUpdateTodoInput,
+		ec.unmarshalInputUserRoleFilter,
 	)
 	first := true
 
@@ -1084,23 +1129,36 @@ func (ec *executionContext) field_List_collaborators_argsAfter(
 func (ec *executionContext) field_List_todos_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_List_todos_argsLimit(ctx, rawArgs)
+	arg0, err := ec.field_List_todos_argsFilter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg0
-	arg1, err := ec.field_List_todos_argsAfter(ctx, rawArgs)
+	args["filter"] = arg0
+	arg1, err := ec.field_List_todos_argsLimit(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg1
-	arg2, err := ec.field_List_todos_argsCriteria(ctx, rawArgs)
+	args["limit"] = arg1
+	arg2, err := ec.field_List_todos_argsAfter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["criteria"] = arg2
+	args["after"] = arg2
 	return args, nil
 }
+func (ec *executionContext) field_List_todos_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.TodosFilterInput, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOTodosFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodosFilterInput(ctx, tmp)
+	}
+
+	var zeroVal *model.TodosFilterInput
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_List_todos_argsLimit(
 	ctx context.Context,
 	rawArgs map[string]any,
@@ -1124,19 +1182,6 @@ func (ec *executionContext) field_List_todos_argsAfter(
 	}
 
 	var zeroVal *string
-	return zeroVal, nil
-}
-
-func (ec *executionContext) field_List_todos_argsCriteria(
-	ctx context.Context,
-	rawArgs map[string]any,
-) (*model.TodosFilterInput, error) {
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("criteria"))
-	if tmp, ok := rawArgs["criteria"]; ok {
-		return ec.unmarshalOTodosFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodosFilterInput(ctx, tmp)
-	}
-
-	var zeroVal *model.TodosFilterInput
 	return zeroVal, nil
 }
 
@@ -1683,18 +1728,36 @@ func (ec *executionContext) field_Query_users_argsAfter(
 func (ec *executionContext) field_User_assigned_to_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_User_assigned_to_argsLimit(ctx, rawArgs)
+	arg0, err := ec.field_User_assigned_to_argsFilter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg0
-	arg1, err := ec.field_User_assigned_to_argsAfter(ctx, rawArgs)
+	args["filter"] = arg0
+	arg1, err := ec.field_User_assigned_to_argsLimit(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg1
+	args["limit"] = arg1
+	arg2, err := ec.field_User_assigned_to_argsAfter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
 	return args, nil
 }
+func (ec *executionContext) field_User_assigned_to_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.TodosFilterInput, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOTodosFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodosFilterInput(ctx, tmp)
+	}
+
+	var zeroVal *model.TodosFilterInput
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_User_assigned_to_argsLimit(
 	ctx context.Context,
 	rawArgs map[string]any,
@@ -1724,18 +1787,36 @@ func (ec *executionContext) field_User_assigned_to_argsAfter(
 func (ec *executionContext) field_User_participate_in_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_User_participate_in_argsLimit(ctx, rawArgs)
+	arg0, err := ec.field_User_participate_in_argsFilter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg0
-	arg1, err := ec.field_User_participate_in_argsAfter(ctx, rawArgs)
+	args["filter"] = arg0
+	arg1, err := ec.field_User_participate_in_argsLimit(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg1
+	args["limit"] = arg1
+	arg2, err := ec.field_User_participate_in_argsAfter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
 	return args, nil
 }
+func (ec *executionContext) field_User_participate_in_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.UserRoleFilter, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOUserRoleFilter2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserRoleFilter(ctx, tmp)
+	}
+
+	var zeroVal *model.UserRoleFilter
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_User_participate_in_argsLimit(
 	ctx context.Context,
 	rawArgs map[string]any,
@@ -3325,7 +3406,7 @@ func (ec *executionContext) _List_todos(ctx context.Context, field graphql.Colle
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.List().Todos(rctx, obj, fc.Args["limit"].(*int32), fc.Args["after"].(*string), fc.Args["criteria"].(*model.TodosFilterInput))
+		return ec.resolvers.List().Todos(rctx, obj, fc.Args["filter"].(*model.TodosFilterInput), fc.Args["limit"].(*int32), fc.Args["after"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5022,6 +5103,60 @@ func (ec *executionContext) fieldContext_Query_user(ctx context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_randomActivity(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_randomActivity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().RandomActivity(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.RandomActivity)
+	fc.Result = res
+	return ec.marshalNRandomActivity2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐRandomActivity(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_randomActivity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "activity":
+				return ec.fieldContext_RandomActivity_activity(ctx, field)
+			case "type":
+				return ec.fieldContext_RandomActivity_type(ctx, field)
+			case "participants":
+				return ec.fieldContext_RandomActivity_participants(ctx, field)
+			case "kidFriendly":
+				return ec.fieldContext_RandomActivity_kidFriendly(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type RandomActivity", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query___type(ctx, field)
 	if err != nil {
@@ -5148,6 +5283,182 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RandomActivity_activity(ctx context.Context, field graphql.CollectedField, obj *model.RandomActivity) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RandomActivity_activity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Activity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RandomActivity_activity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RandomActivity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RandomActivity_type(ctx context.Context, field graphql.CollectedField, obj *model.RandomActivity) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RandomActivity_type(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Type, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RandomActivity_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RandomActivity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RandomActivity_participants(ctx context.Context, field graphql.CollectedField, obj *model.RandomActivity) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RandomActivity_participants(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Participants, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int32)
+	fc.Result = res
+	return ec.marshalNInt2int32(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RandomActivity_participants(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RandomActivity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RandomActivity_kidFriendly(ctx context.Context, field graphql.CollectedField, obj *model.RandomActivity) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RandomActivity_kidFriendly(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.KidFriendly, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RandomActivity_kidFriendly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RandomActivity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5939,7 +6250,7 @@ func (ec *executionContext) _User_assigned_to(ctx context.Context, field graphql
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().AssignedTo(rctx, obj, fc.Args["limit"].(*int32), fc.Args["after"].(*string))
+		return ec.resolvers.User().AssignedTo(rctx, obj, fc.Args["filter"].(*model.TodosFilterInput), fc.Args["limit"].(*int32), fc.Args["after"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6002,7 +6313,7 @@ func (ec *executionContext) _User_participate_in(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().ParticipateIn(rctx, obj, fc.Args["limit"].(*int32), fc.Args["after"].(*string))
+		return ec.resolvers.User().ParticipateIn(rctx, obj, fc.Args["filter"].(*model.UserRoleFilter), fc.Args["limit"].(*int32), fc.Args["after"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -8313,7 +8624,7 @@ func (ec *executionContext) unmarshalInputTodosFilterInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"status", "priority"}
+	fieldsInOrder := [...]string{"status", "priority", "type"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -8334,6 +8645,13 @@ func (ec *executionContext) unmarshalInputTodosFilterInput(ctx context.Context, 
 				return it, err
 			}
 			it.Priority = data
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalOTodoType2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodoType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
 		}
 	}
 
@@ -8430,6 +8748,33 @@ func (ec *executionContext) unmarshalInputUpdateTodoInput(ctx context.Context, o
 				return it, err
 			}
 			it.DueDate = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputUserRoleFilter(ctx context.Context, obj any) (model.UserRoleFilter, error) {
+	var it model.UserRoleFilter
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"role"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "role":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
+			data, err := ec.unmarshalOUserListRole2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserListRole(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Role = data
 		}
 	}
 
@@ -9307,6 +9652,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "randomActivity":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_randomActivity(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -9315,6 +9682,60 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var randomActivityImplementors = []string{"RandomActivity"}
+
+func (ec *executionContext) _RandomActivity(ctx context.Context, sel ast.SelectionSet, obj *model.RandomActivity) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, randomActivityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RandomActivity")
+		case "activity":
+			out.Values[i] = ec._RandomActivity_activity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._RandomActivity_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "participants":
+			out.Values[i] = ec._RandomActivity_participants(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kidFriendly":
+			out.Values[i] = ec._RandomActivity_kidFriendly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10384,6 +10805,20 @@ func (ec *executionContext) marshalNPriority2TodoᚑListᚋinternProjectᚋgraph
 	return v
 }
 
+func (ec *executionContext) marshalNRandomActivity2TodoᚑListᚋinternProjectᚋgraphᚋmodelᚐRandomActivity(ctx context.Context, sel ast.SelectionSet, v model.RandomActivity) graphql.Marshaler {
+	return ec._RandomActivity(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRandomActivity2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐRandomActivity(ctx context.Context, sel ast.SelectionSet, v *model.RandomActivity) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RandomActivity(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNRefreshTokenInput2TodoᚑListᚋinternProjectᚋgraphᚋmodelᚐRefreshTokenInput(ctx context.Context, v any) (model.RefreshTokenInput, error) {
 	res, err := ec.unmarshalInputRefreshTokenInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -10993,6 +11428,22 @@ func (ec *executionContext) marshalOTodoStatus2ᚖTodoᚑListᚋinternProjectᚋ
 	return v
 }
 
+func (ec *executionContext) unmarshalOTodoType2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodoType(ctx context.Context, v any) (*model.TodoType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.TodoType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTodoType2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodoType(ctx context.Context, sel ast.SelectionSet, v *model.TodoType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOTodosFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodosFilterInput(ctx context.Context, v any) (*model.TodosFilterInput, error) {
 	if v == nil {
 		return nil, nil
@@ -11006,6 +11457,22 @@ func (ec *executionContext) marshalOUser2ᚖTodoᚑListᚋinternProjectᚋgraph�
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOUserListRole2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserListRole(ctx context.Context, v any) (*model.UserListRole, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.UserListRole)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOUserListRole2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserListRole(ctx context.Context, sel ast.SelectionSet, v *model.UserListRole) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOUserRole2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserRole(ctx context.Context, v any) (*model.UserRole, error) {
@@ -11022,6 +11489,14 @@ func (ec *executionContext) marshalOUserRole2ᚖTodoᚑListᚋinternProjectᚋgr
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOUserRoleFilter2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUserRoleFilter(ctx context.Context, v any) (*model.UserRoleFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputUserRoleFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

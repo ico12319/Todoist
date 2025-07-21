@@ -11,7 +11,7 @@ type cursorDecorator struct {
 	cursor string
 }
 
-func NewCursorDecorator(inner SqlQueryRetriever, cursor string) SqlQueryRetriever {
+func NewCursorDecorator(inner SqlQueryRetriever, cursor string) *cursorDecorator {
 	return &cursorDecorator{inner: inner, cursor: cursor}
 }
 

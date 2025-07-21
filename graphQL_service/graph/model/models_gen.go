@@ -112,6 +112,13 @@ type PageInfo struct {
 type Query struct {
 }
 
+type RandomActivity struct {
+	Activity     string `json:"activity"`
+	Type         string `json:"type"`
+	Participants int32  `json:"participants"`
+	KidFriendly  bool   `json:"kidFriendly"`
+}
+
 type RefreshTokenInput struct {
 	RefreshToken string `json:"refresh_token"`
 }
@@ -142,6 +149,7 @@ func (this TodoPage) GetTotalCount() int32   { return this.TotalCount }
 type TodosFilterInput struct {
 	Status   *TodoStatus `json:"status,omitempty"`
 	Priority *Priority   `json:"priority,omitempty"`
+	Type     *TodoType   `json:"type,omitempty"`
 }
 
 type UpdateListInput struct {
@@ -175,6 +183,10 @@ type UserPage struct {
 func (UserPage) IsPageable()                 {}
 func (this UserPage) GetPageInfo() *PageInfo { return this.PageInfo }
 func (this UserPage) GetTotalCount() int32   { return this.TotalCount }
+
+type UserRoleFilter struct {
+	Role *UserListRole `json:"role,omitempty"`
+}
 
 type Priority string
 
@@ -289,6 +301,116 @@ func (e *TodoStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e TodoStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TodoType string
+
+const (
+	TodoTypeExpired TodoType = "EXPIRED"
+	TodoTypeActive  TodoType = "ACTIVE"
+)
+
+var AllTodoType = []TodoType{
+	TodoTypeExpired,
+	TodoTypeActive,
+}
+
+func (e TodoType) IsValid() bool {
+	switch e {
+	case TodoTypeExpired, TodoTypeActive:
+		return true
+	}
+	return false
+}
+
+func (e TodoType) String() string {
+	return string(e)
+}
+
+func (e *TodoType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TodoType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TodoType", str)
+	}
+	return nil
+}
+
+func (e TodoType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TodoType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TodoType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type UserListRole string
+
+const (
+	UserListRoleOwner       UserListRole = "OWNER"
+	UserListRoleParticipant UserListRole = "PARTICIPANT"
+)
+
+var AllUserListRole = []UserListRole{
+	UserListRoleOwner,
+	UserListRoleParticipant,
+}
+
+func (e UserListRole) IsValid() bool {
+	switch e {
+	case UserListRoleOwner, UserListRoleParticipant:
+		return true
+	}
+	return false
+}
+
+func (e UserListRole) String() string {
+	return string(e)
+}
+
+func (e *UserListRole) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = UserListRole(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid UserListRole", str)
+	}
+	return nil
+}
+
+func (e UserListRole) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *UserListRole) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e UserListRole) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

@@ -4,14 +4,14 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/gql_middlewares"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
-	"Todo-List/internProject/todo_app_service/pkg/tokens"
+	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"context"
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 type jwtParser interface {
-	ParseJWT(ctx context.Context, tokenString string) (*tokens.Claims, error)
+	ParseJWT(ctx context.Context, tokenString string) (*jwt.Claims, error)
 }
 type roleDirective struct {
 	parser jwtParser

@@ -4,7 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
@@ -62,7 +62,9 @@ func NewService(repo userRepo, converter userConverter, lConverter listConverter
 func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) ([]*models.User, error) {
 	log.C(ctx).Info("getting users in user service")
 
-	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilters, baseUserGetQuery)
+	baseQuery := `SELECT id,email,role FROM (SELECT id, email, role FROM users ORDER BY id)`
+
+	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilters, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get users, error when calling factory function")
 		return nil, err
@@ -82,7 +84,7 @@ func (s *service) GetUserRecord(ctx context.Context, userId string) (*models.Use
 
 	entity, err := s.repo.GetUser(ctx, userId)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get user with id %s in user service due to an error in user repository")
+		log.C(ctx).Errorf("failed to get user with id %s in user service due to an error in user repository", userId)
 		return nil, err
 	}
 
@@ -168,15 +170,21 @@ func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user
 	return s.converter.ConvertFromDBEntityToModel(updatedEntity), nil
 }
 
-func (s *service) GetUserListsRecords(ctx context.Context, uFilter *filters.UserFilters) ([]*models.List, error) {
+func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) ([]*models.List, error) {
 	log.C(ctx).Info("getting lists where user participates in user service")
 
-	if _, err := s.repo.GetUser(ctx, uFilter.UserId); err != nil {
+	if _, err := s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get user lists, error %s when calling user repo", err.Error())
 		return nil, err
 	}
 
-	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilter, baseUserGetLists)
+	baseQuery := `WITH sorted_lists_and_users AS(
+				   SELECT * FROM lists LEFT JOIN user_lists ON
+  				   lists.id = user_lists.list_id
+  				  )
+ 				SELECT id, name, created_at, last_updated, owner, description FROM sorted_lists_and_users`
+
+	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilter, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error when calling factory function")
 		return nil, err
@@ -191,15 +199,24 @@ func (s *service) GetUserListsRecords(ctx context.Context, uFilter *filters.User
 	return s.lConverter.ManyToModel(listEntities), nil
 }
 
-func (s *service) GetTodosAssignedToUser(ctx context.Context, userFilters *filters.UserFilters) ([]*models.Todo, error) {
+func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) ([]*models.Todo, error) {
 	log.C(ctx).Info("getting todos assigned to user in user service")
 
-	if _, err := s.repo.GetUser(ctx, userFilters.UserId); err != nil {
+	if _, err := s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get todos assigned to user, error %s when calling user repo", err.Error())
 		return nil, err
 	}
 
-	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseUserGetTodos)
+	baseQuery := `WITH sorted_todo_cte AS ( 
+				   SELECT todos.id, todos.name, todos.description, todos.list_id,
+				   todos.status,todos.created_at, todos.last_updated, todos.assigned_to,
+		           todos.due_date, todos.priority, users.id AS user_id FROM todos
+				   JOIN users ON todos.assigned_to = users.id ORDER BY todos.id
+ 			      )
+				SELECT id, name, description, list_id, status, created_at,
+				last_updated, assigned_to, due_date, priority FROM sorted_todo_cte`
+
+	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseQuery)
 	if err != nil {
 		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling factory function")
 		return nil, err

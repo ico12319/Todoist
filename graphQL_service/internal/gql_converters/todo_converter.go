@@ -14,16 +14,16 @@ type iPriorityConverter interface {
 type iStatusConverter interface {
 	ToStringStatus(status *gql.TodoStatus) string
 }
-type TodoConverter struct {
+type todoConverter struct {
 	pConverter iPriorityConverter
 	sConverter iStatusConverter
 }
 
-func NewTodoConverter(pConverter iPriorityConverter, sConverter iStatusConverter) *TodoConverter {
-	return &TodoConverter{pConverter: pConverter, sConverter: sConverter}
+func NewTodoConverter(pConverter iPriorityConverter, sConverter iStatusConverter) *todoConverter {
+	return &todoConverter{pConverter: pConverter, sConverter: sConverter}
 }
 
-func (*TodoConverter) ToGQL(todo *models.Todo) *gql.Todo {
+func (*todoConverter) ToGQL(todo *models.Todo) *gql.Todo {
 	return &gql.Todo{
 		ID:          todo.Id,
 		Name:        todo.Name,
@@ -36,7 +36,7 @@ func (*TodoConverter) ToGQL(todo *models.Todo) *gql.Todo {
 	}
 }
 
-func (t *TodoConverter) ManyToGQL(todos []*models.Todo) []*gql.Todo {
+func (t *todoConverter) ManyToGQL(todos []*models.Todo) []*gql.Todo {
 	gqlTodos := make([]*gql.Todo, len(todos))
 
 	for index, todo := range todos {
@@ -47,7 +47,7 @@ func (t *TodoConverter) ManyToGQL(todos []*models.Todo) []*gql.Todo {
 	return gqlTodos
 }
 
-func (t *TodoConverter) ToHandlerModel(todoInput *gql.UpdateTodoInput) *handler_models.UpdateTodo {
+func (t *todoConverter) ToHandlerModel(todoInput *gql.UpdateTodoInput) *handler_models.UpdateTodo {
 	var status *constants.TodoStatus
 	if todoInput.Status != nil {
 		s := constants.TodoStatus(t.sConverter.ToStringStatus(todoInput.Status))
@@ -70,7 +70,7 @@ func (t *TodoConverter) ToHandlerModel(todoInput *gql.UpdateTodoInput) *handler_
 	}
 }
 
-func (t *TodoConverter) CreateTodoInputToModel(todoInput *gql.CreateTodoInput) *handler_models.CreateTodo {
+func (t *todoConverter) CreateTodoInputToModel(todoInput *gql.CreateTodoInput) *handler_models.CreateTodo {
 	return &handler_models.CreateTodo{
 		Name:        todoInput.Name,
 		Description: todoInput.Description,
@@ -81,7 +81,7 @@ func (t *TodoConverter) CreateTodoInputToModel(todoInput *gql.CreateTodoInput) *
 	}
 }
 
-func (*TodoConverter) FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bool) *gql.DeleteTodoPayload {
+func (*todoConverter) FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bool) *gql.DeleteTodoPayload {
 	return &gql.DeleteTodoPayload{
 		Success:     success,
 		ID:          todo.ID,
@@ -95,7 +95,7 @@ func (*TodoConverter) FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bo
 	}
 }
 
-func (t *TodoConverter) ManyToDeleteTodoPayload(todos []*gql.Todo, success bool) []*gql.DeleteTodoPayload {
+func (t *todoConverter) ManyToDeleteTodoPayload(todos []*gql.Todo, success bool) []*gql.DeleteTodoPayload {
 	deleteTodoPayloads := make([]*gql.DeleteTodoPayload, 0, len(todos))
 	for _, todo := range todos {
 		converted := t.FromGQLModelToDeleteTodoPayload(todo, success)
