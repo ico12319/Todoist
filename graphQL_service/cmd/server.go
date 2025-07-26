@@ -1,12 +1,12 @@
 package main
 
 import (
-	graph2 "Todo-List/internProject/graphQL_service/graph"
-	"Todo-List/internProject/graphQL_service/internal/auth_header_setters"
+	"Todo-List/internProject/graphQL_service/graph"
 	"Todo-List/internProject/graphQL_service/internal/directives"
+	"Todo-List/internProject/graphQL_service/internal/gql_auth_header_setters"
 	"Todo-List/internProject/graphQL_service/internal/gql_converters"
-	"Todo-List/internProject/graphQL_service/internal/gql_http_helpers"
-	gql_middlewares2 "Todo-List/internProject/graphQL_service/internal/gql_middlewares"
+	"Todo-List/internProject/graphQL_service/internal/gql_middlewares"
+	"Todo-List/internProject/graphQL_service/internal/health"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/access"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/activity"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/list"
@@ -14,7 +14,7 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/resolvers/user"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	_ "Todo-List/internProject/graphQL_service/internal/url_decorators/url_decorators_creators"
-	http_helpers2 "Todo-List/internProject/todo_app_service/pkg/http_helpers"
+	"Todo-List/internProject/todo_app_service/pkg/http_helpers"
 	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"context"
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -22,15 +22,17 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 
-	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"github.com/gorilla/mux"
 	"github.com/vektah/gqlparser/v2/ast"
 	"net/http"
 )
 
 func main() {
-	port := log.GetInstance().GraphConfig.Port
-	restUrl := log.GetInstance().RestConfig.TodoApiUrl
+	configManager := configuration.GetInstance()
+
+	port := configManager.GraphConfig.Port
+	restUrl := configManager.RestConfig.TodoApiUrl
 
 	httpClient := &http.Client{}
 
@@ -44,27 +46,25 @@ func main() {
 	activityConverter := gql_converters.NewActivityConverter()
 
 	urlDecoratorFactory := url_decorators.GetUrlDecoratorFactoryInstance()
-	requestDecorator := auth_header_setters.NewRequestAuthHeader()
+	requestDecorator := gql_auth_header_setters.NewRequestAuthHeader()
 
-	httpRequester := http_helpers2.NewHttpRequester()
-	jsonMarshaller := gql_http_helpers.NewJsonMarshaller()
+	httpService := http_helpers.NewService(httpClient, requestDecorator)
+	jsonMarshaller := http_helpers.NewJsonMarshaller()
 
-	httpResponseGetter := gql_http_helpers.NewHttpResponseGetter(httpClient, requestDecorator, httpRequester)
-
-	listResolver := list.NewResolver(listConv, userConv, todoConv, restUrl, urlDecoratorFactory, httpResponseGetter, jsonMarshaller)
-	todoResolver := todo.NewResolver(urlDecoratorFactory, todoConv, userConv, listConv, restUrl, jsonMarshaller, httpResponseGetter)
-	userResolver := user.NewResolver(userConv, listConv, todoConv, restUrl, urlDecoratorFactory, httpResponseGetter)
-	accessResolver := access.NewResolver(accessConv, jsonMarshaller, httpResponseGetter, restUrl)
-	activityResolver := activity.NewResolver(restUrl, httpResponseGetter, activityConverter)
+	listResolver := list.NewResolver(listConv, userConv, todoConv, restUrl, urlDecoratorFactory, httpService, jsonMarshaller)
+	todoResolver := todo.NewResolver(urlDecoratorFactory, todoConv, userConv, listConv, restUrl, jsonMarshaller, httpService)
+	userResolver := user.NewResolver(userConv, listConv, todoConv, restUrl, urlDecoratorFactory, httpService)
+	accessResolver := access.NewResolver(accessConv, jsonMarshaller, httpService, restUrl)
+	activityResolver := activity.NewResolver(restUrl, httpService, activityConverter)
 	jwtParserHelper := jwt.NewJwtManager()
 	jwtParser := jwt.NewJwtParseService(jwtParserHelper)
 
 	roleDirective := directives.NewRoleDirectiveImplementation(jwtParser)
 
-	root := graph2.NewResolver(listResolver, todoResolver, userResolver, accessResolver, activityResolver)
-	srv := handler.New(graph2.NewExecutableSchema(graph2.Config{
+	root := graph.NewResolver(listResolver, todoResolver, userResolver, accessResolver, activityResolver)
+	srv := handler.New(graph.NewExecutableSchema(graph.Config{
 		Resolvers: root,
-		Directives: graph2.DirectiveRoot{
+		Directives: graph.DirectiveRoot{
 			HasRole: roleDirective.HasRole,
 		},
 	}))
@@ -80,8 +80,15 @@ func main() {
 		Cache: lru.New[string](100),
 	})
 
+	restHealthService := health.NewService(httpService, httpClient)
+	restHealthHandler := health.NewHandler(restHealthService, restUrl)
+
 	r := mux.NewRouter()
-	r.Handle("/query", srv).Methods(http.MethodGet, http.MethodPost)
-	r.Use(gql_middlewares2.NewJwtPopulateMiddleware(), gql_middlewares2.ContentTypeMiddlewareFunc())
-	log.C(context.Background()).Fatal(http.ListenAndServe(":"+port, r))
+	r.HandleFunc("/api/healthz", restHealthHandler.HandleCheckingRESTHealthz).Methods(http.MethodGet)
+	r.HandleFunc("/api/readyz", restHealthHandler.HandleCheckingRestReadyz).Methods(http.MethodGet)
+
+	mainGql := r.PathPrefix("/query").Subrouter()
+	mainGql.Handle("", srv).Methods(http.MethodPost)
+	mainGql.Use(gql_middlewares.NewJwtPopulateMiddleware(), gql_middlewares.ContentTypeMiddlewareFunc())
+	configuration.C(context.Background()).Fatal(http.ListenAndServe(":"+port, r))
 }

@@ -8,8 +8,9 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/lists"
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/oauth"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/random_activites"
-	refresh2 "Todo-List/internProject/todo_app_service/internal/refresh"
+	"Todo-List/internProject/todo_app_service/internal/refresh"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/todos"
@@ -70,7 +71,7 @@ type userHandler interface {
 
 type listService interface {
 	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error)
+	GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) ([]*models.User, error)
 	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
 }
 
@@ -125,35 +126,40 @@ func NewServer() *server {
 	configManagerInstance := config.GetInstance()
 
 	client := &http.Client{}
-	db := config.OpenPostgres(configManagerInstance.DbConfig)
+	dbConnection := config.OpenPostgres(configManagerInstance.DbConfig)
 
-	tRepo := todos.NewSQLTodoDB(db)
-	lRepo := lists.NewSQLListDB(db)
-	uRepo := users.NewSQLUserDB(db)
+	sqlDB := persistence.NewSqlDb(dbConnection)
+
+	tRepo := todos.NewRepo()
+	lRepo := lists.NewRepo()
+	uRepo := users.NewRepo()
+	refreshRepo := refresh.NewRepo()
 
 	uuidGen := generators.NewUuidGenerator()
 	timeGen := generators.NewTimeGenerator()
 
 	todoConverter := converters.NewTodoConverter()
-	uDBConverter := converters.NewUserConverter()
+	userConverter := converters.NewUserConverter()
 	listConverter := converters.NewListConverter()
+	refreshConverter := converters.NewRefreshConverter()
 
 	decoratorFactory := sql_query_decorators.GetDecoratorFactoryInstance()
 
-	httpRequester := http_helpers.NewHttpRequester()
+	httpService := http_helpers.NewService(client, nil)
 
-	uService := users.NewService(uRepo, uDBConverter, listConverter, todoConverter, uuidGen, decoratorFactory)
-	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uService, uDBConverter, decoratorFactory)
-	tService := todos.NewService(tRepo, lService, uuidGen, timeGen, todoConverter, uDBConverter, decoratorFactory)
-	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpRequester, client)
+	uService := users.NewService(uRepo, userConverter, listConverter, todoConverter, uuidGen, decoratorFactory, sqlDB)
+	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uRepo, tRepo, userConverter, decoratorFactory, sqlDB)
+	tService := todos.NewService(tRepo, lRepo, uuidGen, timeGen, todoConverter, userConverter, decoratorFactory, sqlDB)
+	refreshService := refresh.NewService(refreshRepo, uRepo, refreshConverter, userConverter, sqlDB)
+	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpService, client)
 
 	fValidator := validators.GetInstance()
 	tHandler := todos.NewHandler(tService, fValidator)
 	lHandler := lists.NewHandler(lService, fValidator)
-	uHandler := users.NewHandler(uService, fValidator)
+	uHandler := users.NewHandler(uService)
 	activityHandler := random_activites.NewHandler(activityService)
 
-	gitHubService := gitHub.NewService(httpRequester, client)
+	gitHubService := gitHub.NewService(httpService, client)
 
 	jwtManager := jwt.NewJwtManager()
 
@@ -162,18 +168,15 @@ func NewServer() *server {
 	stateGenerator := generators.NewStateGenerator()
 	jwtCreator := jwt.NewJwtService(uService, timeGen, jwtManager, configManagerInstance.JwtConfig.Secret)
 
-	refreshRepo := refresh2.NewSqlRefreshDB(db)
-	refreshConverter := converters.NewRefreshConverter()
-	refreshService := refresh2.NewService(refreshRepo, uService, refreshConverter, uDBConverter)
 	jwtIssuer := jwt.NewJwtIssuer(jwtCreator, userInfoAggregator, refreshService, uService)
 
-	oauthService := oauth.NewOauthService(stateGenerator, configManagerInstance.OauthConfig)
-	oHandler := oauth.NewHandler(oauthService, jwtIssuer)
+	oauthService := oauth.NewService(stateGenerator, configManagerInstance.OauthConfig)
+	oHandler := oauth.NewHandler(oauthService, jwtIssuer, httpService)
 
 	tokenParser := jwt.NewJwtParseService(jwtManager)
 
-	hHandler := checks.NewHandler(db)
-	rHandler := refresh2.NewHandler(jwtIssuer)
+	hHandler := checks.NewHandler(sqlDB)
+	rHandler := refresh.NewHandler(jwtIssuer)
 
 	return &server{
 		listHandler:     lHandler,
@@ -346,7 +349,7 @@ func (s *server) Start() {
 
 	todoRouter := router.PathPrefix("/todos").Subrouter()
 	todoIdReaderRouter := todoRouter.PathPrefix(fmt.Sprintf("/{todo_id:%s}", constants.UUID_REGEX)).Subrouter()
-	todoRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc)
+	todoIdReaderRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc)
 	s.registerReadTodoIdPaths(todoIdReaderRouter)
 
 	todoIdAuthRouter := todoRouter.PathPrefix(fmt.Sprintf("/{todo_id:%s}", constants.UUID_REGEX)).Subrouter()

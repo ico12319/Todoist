@@ -1,4 +1,4 @@
-package auth_header_setters
+package gql_auth_header_setters
 
 import (
 	"Todo-List/internProject/graphQL_service/internal/gql_middlewares"

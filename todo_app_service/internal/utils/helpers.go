@@ -14,7 +14,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/lib/pq"
 	"log"
 	"net/http"
 	"slices"
@@ -75,83 +74,6 @@ func ConvertFromPointerToSQLNullTime(t *time.Time) sql.NullTime {
 func ConvertFromStringToUUID(uuidCandidate string) uuid.UUID {
 	res := uuid.FromStringOrNil(uuidCandidate)
 	return res
-}
-
-func MapPostgresListErrorToError(err error, entityList *entities.List) error {
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		switch pqErr.Code {
-		case "23505":
-			return application_errors.NewAlreadyExistError(constants.LIST_TARGET, entityList.Name)
-		case "23503":
-			return application_errors.NewNotFoundError(constants.USER_TARGET, entityList.Owner.String())
-		}
-	}
-	return err
-}
-
-func MapPostgresTodoError(err error, todo *entities.Todo) error {
-	var pqErr *pq.Error
-	if !errors.As(err, &pqErr) {
-		return err
-	}
-
-	switch pqErr.Code {
-	case "23505":
-		return application_errors.NewNotFoundError(constants.TODO_TARGET, todo.Id.String())
-	case "23503":
-		switch pqErr.Constraint {
-		case "todos_list_id_fkey":
-			return application_errors.NewNotFoundError(constants.LIST_TARGET, todo.ListId.String())
-		case "todos_assigned_to_fkey":
-			if todo.AssignedTo.Valid {
-				return application_errors.NewNotFoundError(constants.USER_TARGET, todo.AssignedTo.UUID.String())
-			}
-		}
-	}
-	return err
-}
-
-func MapPostgresUserError(err error, user *entities.User) error {
-	var pqErr *pq.Error
-	if !errors.As(err, &pqErr) {
-		return errors.New("unexpected database error")
-	}
-
-	switch pqErr.Code {
-	case "23505":
-		switch pqErr.Constraint {
-		case "users_pkey":
-			return application_errors.NewAlreadyExistError(constants.USER_TARGET, user.Id.String())
-		case "users_email_key":
-
-			return application_errors.NewAlreadyExistError(constants.USER_TARGET, user.Email)
-		}
-	}
-
-	return errors.New("unexpected database error")
-}
-
-func MapPostgresNonExistingUserInUserTable(err error, refresh *entities.Refresh) error {
-	var pqErr *pq.Error
-	if !errors.As(err, &pqErr) {
-		return errors.New("unexpected database error")
-	}
-
-	switch pqErr.Code {
-	case "23505":
-		switch pqErr.Constraint {
-		case "user_refresh_tokens_pkey":
-			return application_errors.NewAlreadyExistError(constants.USER_TARGET, refresh.UserId.String())
-		case "users_refresh_tokens_refresh_token_key":
-			return application_errors.NewAlreadyExistError(constants.REFRESH_TARGET, refresh.RefreshToken)
-		}
-	case "23503":
-		return application_errors.NewNotFoundError(constants.USER_TARGET, refresh.UserId.String())
-	}
-
-	return errors.New("unexpected database error")
-
 }
 
 func GetValueFromContext[T any](ctx context.Context, valueKey interface{}) (T, error) {
@@ -280,6 +202,7 @@ func GetServerStatus(statusValue string) map[string]string {
 func OrchestrateGoRoutines(ctx context.Context, chan1 chan ChannelResult[string], chan2 chan ChannelResult[string]) (string, string, error) {
 	var result1 string
 	var result2 string
+
 	for i := 0; i < constants.GOROUTINES_COUNT; i++ {
 		select {
 		case chRes := <-chan1:

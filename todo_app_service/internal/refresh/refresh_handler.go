@@ -2,7 +2,7 @@ package refresh
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/utils"
-	config "Todo-List/internProject/todo_app_service/pkg/configuration"
+	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
@@ -11,6 +11,7 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=jwtIssuer --exported --output=./mocks --outpkg=mocks --filename=jwt_issuer.go --with-expecter=true
 type jwtIssuer interface {
 	GetRenewedTokens(context.Context, *handler_models.Refresh) (*models.CallbackResponse, error)
 }
@@ -28,14 +29,14 @@ func (h *handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	var refresh handler_models.Refresh
 	if err := json.NewDecoder(r.Body).Decode(&refresh); err != nil {
-		config.C(ctx).Errorf("failed to decode refresh handler model %s", err.Error())
+		log.C(ctx).Errorf("failed to decode refresh handler model %s", err.Error())
 		utils.EncodeError(w, constants.INVALID_REQUEST_BODY, http.StatusBadRequest)
 		return
 	}
 
 	renewedTokens, err := h.issuer.GetRenewedTokens(ctx, &refresh)
 	if err != nil {
-		config.C(ctx).Errorf("failed to refresh tokens, error %s when calling service method", err.Error())
+		log.C(ctx).Errorf("failed to refresh tokens, error %s when calling service method", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -15,7 +15,7 @@ func NewTodoConverter() *todoConverter {
 	return &todoConverter{}
 }
 
-func (t *todoConverter) ConvertFromDBEntityToModel(todo *entities.Todo) *models.Todo {
+func (t *todoConverter) ToModel(todo *entities.Todo) *models.Todo {
 	dueDate := utils.ExtractDueDateValueFromSQLNull(todo)
 	assignedTo := utils.ConvertFromNullUuidToStringPtr(todo.AssignedTo)
 
@@ -33,7 +33,7 @@ func (t *todoConverter) ConvertFromDBEntityToModel(todo *entities.Todo) *models.
 	}
 }
 
-func (t *todoConverter) ConvertFromModelToDBEntity(todo *models.Todo) *entities.Todo {
+func (t *todoConverter) ToEntity(todo *models.Todo) *entities.Todo {
 	dueDate := utils.ConvertFromPointerToSQLNullTime(todo.DueDate)
 	assignedTo := utils.ConvertFromPointerToNullUUID(todo.AssignedTo)
 
@@ -88,7 +88,7 @@ func (t *todoConverter) ManyToModel(todos []entities.Todo) []*models.Todo {
 	modelsTodos := make([]*models.Todo, len(todos))
 
 	for index, entity := range todos {
-		model := t.ConvertFromDBEntityToModel(&entity)
+		model := t.ToModel(&entity)
 		modelsTodos[index] = model
 	}
 

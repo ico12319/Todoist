@@ -18,7 +18,7 @@ import (
 )
 
 type httpResponseGetter interface {
-	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
+	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
@@ -82,7 +82,7 @@ func (r *resolver) Todos(ctx context.Context, filter *url_filters.TodoFilters) (
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -142,7 +142,7 @@ func (r *resolver) DeleteTodosByListID(ctx context.Context, id string) ([]*gql.D
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -166,7 +166,7 @@ func (r *resolver) UpdateTodo(ctx context.Context, id string, input gql.UpdateTo
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -213,7 +213,7 @@ func (r *resolver) DeleteTodo(ctx context.Context, id string) (*gql.DeleteTodoPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -234,7 +234,7 @@ func (r *resolver) DeleteTodos(ctx context.Context) ([]*gql.DeleteTodoPayload, e
 
 	url := r.restUrl + gql_constants.TODO_PATH
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -257,7 +257,7 @@ func (r *resolver) CreateTodo(ctx context.Context, input gql.CreateTodoInput) (*
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -284,7 +284,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, er
 	formattedSuffix := fmt.Sprintf("/%s/assignee", obj.ID)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -317,7 +317,7 @@ func (r *resolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, error) {
 	formattedSuffix := fmt.Sprintf("/%s", modelTodo.ListId)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -344,7 +344,7 @@ func (r *resolver) getModelTodo(ctx context.Context, id string) (*models.Todo, e
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -376,7 +376,7 @@ func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.
 	formattedSuffix := fmt.Sprintf("/%s%s", listId, gql_constants.TODO_PATH)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -398,7 +398,7 @@ func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.
 		log.C(ctx).Errorf("failed to decode http response, error %s", err.Error())
 		return nil, err
 	}
-	
+
 	return r.tConverter.ManyToGQL(todos), nil
 }
 
@@ -407,7 +407,7 @@ func (r *resolver) getTodos(ctx context.Context) ([]*gql.Todo, error) {
 
 	url := r.restUrl + gql_constants.TODO_PATH
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err

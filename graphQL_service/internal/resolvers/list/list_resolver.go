@@ -23,7 +23,7 @@ type jsonMarshaller interface {
 }
 
 type httpResponseGetter interface {
-	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
+	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
@@ -87,7 +87,7 @@ func (r *resolver) Lists(ctx context.Context, filter *url_filters.BaseFilters) (
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -124,7 +124,7 @@ func (r *resolver) List(ctx context.Context, id string) (*gql.List, error) {
 	formatedId := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedId
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -156,7 +156,7 @@ func (r *resolver) ListOwner(ctx context.Context, obj *gql.List) (*gql.User, err
 	formatedSuffix := fmt.Sprintf("/%s/owner", obj.ID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -190,7 +190,7 @@ func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filter
 		return utils.InitEmptyTodoPage(), err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -240,7 +240,7 @@ func (r *resolver) DeleteList(ctx context.Context, id string) (*gql.DeleteListPa
 	formattedUrl := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedUrl
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -264,7 +264,7 @@ func (r *resolver) UpdateList(ctx context.Context, id string, input gql.UpdateLi
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -306,7 +306,7 @@ func (r *resolver) AddListCollaborator(ctx context.Context, input gql.Collaborat
 		}, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -356,7 +356,7 @@ func (r *resolver) DeleteListCollaborator(ctx context.Context, id string, userID
 	formattedSuffix := fmt.Sprintf("/%s%s/%s", id, gql_constants.COLLABORATOR_PATH, userID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete collaborator with id %s, error when trying to get http response", userID)
 		return &gql.DeleteCollaboratorPayload{
@@ -387,7 +387,7 @@ func (r *resolver) Collaborators(ctx context.Context, obj *gql.List, filters *ur
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -431,7 +431,7 @@ func (r *resolver) CreateList(ctx context.Context, input gql.CreateListInput) (*
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -463,7 +463,7 @@ func (r *resolver) DeleteLists(ctx context.Context) ([]*gql.DeleteListPayload, e
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -478,7 +478,7 @@ func (r *resolver) getLists(ctx context.Context) ([]*gql.List, error) {
 
 	url := r.restUrl + gql_constants.LISTS_PATH
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err

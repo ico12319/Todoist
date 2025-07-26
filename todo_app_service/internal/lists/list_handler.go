@@ -17,8 +17,8 @@ import (
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type listService interface {
 	GetListRecord(context.Context, string) (*models.List, error)
-	GetListsRecords(context.Context, *filters.ListFilters) ([]*models.List, error)
-	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
+	GetListsRecords(context.Context, *filters.BaseFilters) ([]*models.List, error)
+	GetCollaborators(context.Context, string, *filters.BaseFilters) ([]*models.User, error)
 	GetListOwnerRecord(context.Context, string) (*models.User, error)
 	DeleteListRecord(context.Context, string) error
 	DeleteLists(context.Context) error
@@ -48,11 +48,9 @@ func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 	limit := utils.GetLimitFromUrl(r)
 	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
 
-	lFilter := &filters.ListFilters{
-		BaseFilters: filters.BaseFilters{
-			Limit:  limit,
-			Cursor: cursor,
-		},
+	lFilter := &filters.BaseFilters{
+		Limit:  limit,
+		Cursor: cursor,
 	}
 
 	lists, err := h.serv.GetListsRecords(ctx, lFilter)
@@ -84,15 +82,12 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 	limit := utils.GetLimitFromUrl(r)
 	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
 
-	lFilters := &filters.ListFilters{
-		BaseFilters: filters.BaseFilters{
-			Limit:  limit,
-			Cursor: cursor,
-		},
-		ListId: listId,
+	lFilters := &filters.BaseFilters{
+		Limit:  limit,
+		Cursor: cursor,
 	}
 
-	collaborators, err := h.serv.GetCollaborators(ctx, lFilters)
+	collaborators, err := h.serv.GetCollaborators(ctx, listId, lFilters)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list's collaborators in list handler due to an error %s in list service", err.Error())
 

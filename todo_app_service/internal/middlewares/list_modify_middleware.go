@@ -20,7 +20,7 @@ var UserRoleKey = userRoleKey{}
 
 type listService interface {
 	GetListRecord(context.Context, string) (*models.List, error)
-	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
+	GetCollaborators(context.Context, string, *filters.BaseFilters) ([]*models.User, error)
 }
 
 type listModifyMiddleware struct {
@@ -66,9 +66,7 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authUsers, err := a.serv.GetCollaborators(r.Context(), &filters.ListFilters{
-		ListId: listId,
-	})
+	authUsers, err := a.serv.GetCollaborators(r.Context(), listId, &filters.BaseFilters{})
 
 	if err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)

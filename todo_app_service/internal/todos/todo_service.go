@@ -2,6 +2,7 @@ package todos
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -9,6 +10,7 @@ import (
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -25,12 +27,12 @@ type todoRepo interface {
 	GetTodosByListId(ctx context.Context, decorator sqlQueryRetriever, listId string) ([]entities.Todo, error)
 	GetTodoAssigneeTo(ctx context.Context, todoId string) (*entities.User, error)
 	GetTodoByListId(ctx context.Context, listId string, todoId string) (*entities.Todo, error)
+	UnassignUserFromTodos(ctx context.Context, userId string, listId string) error
 }
 
-type listService interface {
-	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error)
-	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
+type listRepo interface {
+	GetList(ctx context.Context, listId string) (*entities.List, error)
+	GetListOwner(ctx context.Context, listId string) (*entities.User, error)
 	CheckWhetherUserIsCollaborator(ctx context.Context, listId string, userId string) (bool, error)
 }
 
@@ -45,15 +47,15 @@ type timeGenerator interface {
 }
 
 type todoConverter interface {
-	ConvertFromDBEntityToModel(todo *entities.Todo) *models.Todo
-	ConvertFromModelToDBEntity(todo *models.Todo) *entities.Todo
+	ToModel(todo *entities.Todo) *models.Todo
+	ToEntity(todo *models.Todo) *entities.Todo
 	ManyToModel(todos []entities.Todo) []*models.Todo
 	ConvertFromCreateHandlerModelToModel(todo *handler_models.CreateTodo) *models.Todo
 	ConvertFromUpdateHandlerModelToModel(todo *handler_models.UpdateTodo) *models.Todo
 }
 
 type userConverter interface {
-	ConvertFromDBEntityToModel(user *entities.User) *models.User
+	ToModel(user *entities.User) *models.User
 }
 
 type sqlDecoratorFactory interface {
@@ -62,36 +64,52 @@ type sqlDecoratorFactory interface {
 
 type service struct {
 	tRepo      todoRepo
-	lService   listService
+	lRepo      listRepo
 	uuidGen    uuidGenerator
 	timeGen    timeGenerator
 	tConverter todoConverter
 	uConverter userConverter
 	factory    sqlDecoratorFactory
+	transact   persistence.Transactioner
 }
 
-func NewService(tRepo todoRepo, lService listService, uuidGen uuidGenerator, timeGen timeGenerator,
-	todoConverter todoConverter, userConverter userConverter, factory sqlDecoratorFactory) *service {
-	return &service{tRepo: tRepo, lService: lService, uuidGen: uuidGen, timeGen: timeGen,
-		tConverter: todoConverter, uConverter: userConverter, factory: factory}
+func NewService(tRepo todoRepo, lRepo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
+	todoConverter todoConverter, userConverter userConverter, factory sqlDecoratorFactory, transact persistence.Transactioner) *service {
+	return &service{
+		tRepo:      tRepo,
+		lRepo:      lRepo,
+		uuidGen:    uuidGen,
+		timeGen:    timeGen,
+		tConverter: todoConverter,
+		uConverter: userConverter,
+		factory:    factory,
+		transact:   transact,
+	}
 }
 
 func (s *service) CreateTodoRecord(ctx context.Context, todo *handler_models.CreateTodo, creator *models.User) (*models.Todo, error) {
 	log.C(ctx).Info("creating todo in todo service")
 
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	if creator.Role != constants.Admin {
-		createErr := fmt.Errorf("only users that are part of the list can create todo")
-		if err := s.checkWhetherUserHasAccessToTodo(ctx, creator.Id, todo.ListId, createErr); err != nil {
+		if err = s.checkWhetherUserHasAccessToTodo(ctx, creator.Id, todo.ListId, errors.New("only users that are part of the list can create todo")); err != nil {
 			log.C(ctx).Errorf("failed to create todo, error %s user trying to create todo does not have access to it", err.Error())
 			return nil, err
 		}
+	}
 
-		if todo.AssignedTo != nil {
-			assignError := fmt.Errorf("only the list owner and the list collaborators can be assigned to todo")
-			if err := s.checkWhetherUserHasAccessToTodo(ctx, *todo.AssignedTo, todo.ListId, assignError); err != nil {
-				log.C(ctx).Errorf("failed to create todo, error %s", err.Error())
-				return nil, err
-			}
+	if todo.AssignedTo != nil {
+		if err = s.checkWhetherUserHasAccessToTodo(ctx, *todo.AssignedTo, todo.ListId, errors.New("only the list owner and the list collaborators can be assigned to todo")); err != nil {
+			log.C(ctx).Errorf("failed to create todo, error %s", err.Error())
+			return nil, err
 		}
 	}
 
@@ -101,7 +119,7 @@ func (s *service) CreateTodoRecord(ctx context.Context, todo *handler_models.Cre
 	modelTodo.LastUpdated = s.timeGen.Now()
 	modelTodo.CreatedAt = s.timeGen.Now()
 
-	entityTodo := s.tConverter.ConvertFromModelToDBEntity(modelTodo)
+	entityTodo := s.tConverter.ToEntity(modelTodo)
 
 	returnedEntity, err := s.tRepo.CreateTodo(ctx, entityTodo)
 	if err != nil {
@@ -109,34 +127,97 @@ func (s *service) CreateTodoRecord(ctx context.Context, todo *handler_models.Cre
 		return nil, err
 	}
 
-	return s.tConverter.ConvertFromDBEntityToModel(returnedEntity), nil
+	createdModel := s.tConverter.ToModel(returnedEntity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+
+	return createdModel, nil
 }
 
 func (s *service) DeleteTodoRecord(ctx context.Context, todoId string) error {
 	log.C(ctx).Infof("deleting todo with id %s in todo service", todoId)
 
-	return s.tRepo.DeleteTodo(ctx, todoId)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.tRepo.DeleteTodo(ctx, todoId); err != nil {
+		log.C(ctx).Errorf("failed to delete todo with id %s", err.Error())
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *service) DeleteTodosRecordsByListId(ctx context.Context, listId string) error {
 	log.C(ctx).Infof("deleting todos from a list with id %s", listId)
 
-	if _, err := s.lService.GetListRecord(ctx, listId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to delete todos from a list with id %s, error %s when calling list repo", listId, err.Error())
 		return err
 	}
 
-	return s.tRepo.DeleteTodosByListId(ctx, listId)
+	if err = s.tRepo.DeleteTodosByListId(ctx, listId); err != nil {
+		log.C(ctx).Errorf("failed to delete todos by list id %s, error %s", listId, err.Error())
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *service) DeleteTodosRecords(ctx context.Context) error {
 	log.C(ctx).Info("deleting all todos")
 
-	return s.tRepo.DeleteTodos(ctx)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.tRepo.DeleteTodos(ctx); err != nil {
+		log.C(ctx).Errorf("failed to delete todos in todo sercice, error %s", err.Error())
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete todos, error %s", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) UpdateTodoRecord(ctx context.Context, todoId string, todo *handler_models.UpdateTodo) (*models.Todo, error) {
 	log.C(ctx).Infof("updating todo with id %s in todo service", todoId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	sqlExecParams := map[string]interface{}{"id": todoId}
 	sqlFields := make([]string, 0)
@@ -145,7 +226,7 @@ func (s *service) UpdateTodoRecord(ctx context.Context, todoId string, todo *han
 	if modelTodo.AssignedTo != nil {
 		assignError := fmt.Errorf("only the list owner and the list collaborators can be assigned to todo")
 
-		if err := s.checkWhetherUserHasAccessToTodo(ctx, *modelTodo.AssignedTo, modelTodo.ListId, assignError); err != nil {
+		if err = s.checkWhetherUserHasAccessToTodo(ctx, *modelTodo.AssignedTo, modelTodo.ListId, assignError); err != nil {
 			log.C(ctx).Errorf("failed to update todo, error %s", err.Error())
 			return nil, err
 		}
@@ -159,11 +240,27 @@ func (s *service) UpdateTodoRecord(ctx context.Context, todoId string, todo *han
 		return nil, err
 	}
 
-	return s.tConverter.ConvertFromDBEntityToModel(entity), nil
+	updatedModel := s.tConverter.ToModel(entity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to update todo, error %s", err.Error())
+		return nil, err
+	}
+
+	return updatedModel, nil
 }
 
 func (s *service) GetTodoRecord(ctx context.Context, todoId string) (*models.Todo, error) {
 	log.C(ctx).Infof("getting todo with id %s", todoId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	entity, err := s.tRepo.GetTodo(ctx, todoId)
 	if err != nil {
@@ -171,11 +268,27 @@ func (s *service) GetTodoRecord(ctx context.Context, todoId string) (*models.Tod
 		return nil, err
 	}
 
-	return s.tConverter.ConvertFromDBEntityToModel(entity), nil
+	todoModel := s.tConverter.ToModel(entity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo with id %s, error %s", todoId, err.Error())
+		return nil, err
+	}
+
+	return todoModel, nil
 }
 
 func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*models.User, error) {
 	log.C(ctx).Infof("getting user assigned to todo with id %s", todoId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	assignee, err := s.tRepo.GetTodoAssigneeTo(ctx, todoId)
 	if err != nil {
@@ -183,7 +296,14 @@ func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*
 		return nil, err
 	}
 
-	return s.uConverter.ConvertFromDBEntityToModel(assignee), nil
+	assigneeModel := s.uConverter.ToModel(assignee)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo assigee, todo id %s, error %s", todoId, err.Error())
+		return nil, err
+	}
+
+	return assigneeModel, nil
 }
 
 func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) ([]*models.Todo, error) {
@@ -192,6 +312,15 @@ func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilte
 	// this is just the base part of the sql query,
 	//the decorator decorates it and pass the already decorated query to the repo layer
 	//where the actual execution happens
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	baseQuery := `WITH sorted_todos AS(
 		SELECT * FROM todos ORDER BY id
@@ -210,13 +339,29 @@ func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilte
 		return nil, err
 	}
 
-	return s.tConverter.ManyToModel(eTodos), nil
+	todosModels := s.tConverter.ManyToModel(eTodos)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todos, error %s", err.Error())
+		return nil, err
+	}
+
+	return todosModels, nil
 }
 
 func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) ([]*models.Todo, error) {
 	log.C(ctx).Infof("getting todos of list with id %s in list service", listId)
 
-	if _, err := s.lService.GetListRecord(ctx, listId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err := s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when calling list repo", listId)
 		return nil, err
 	}
@@ -238,13 +383,29 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 		return nil, err
 	}
 
-	return s.tConverter.ManyToModel(eTodos), nil
+	modelTodos := s.tConverter.ManyToModel(eTodos)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todos by list_id %s, error  %s", listId, err.Error())
+		return nil, err
+	}
+
+	return modelTodos, nil
 }
 
 func (s *service) GetTodoByListId(ctx context.Context, listId string, todoId string) (*models.Todo, error) {
 	log.C(ctx).Infof("getting todo with id %s, from list with id %s in todo service", todoId, listId)
 
-	if _, err := s.lService.GetListRecord(ctx, listId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to get todo with id %s, invalid list id", todoId)
 		return nil, err
 	}
@@ -255,25 +416,59 @@ func (s *service) GetTodoByListId(ctx context.Context, listId string, todoId str
 		return nil, err
 	}
 
-	return s.tConverter.ConvertFromDBEntityToModel(entityTodo), nil
+	modelTodo := s.tConverter.ToModel(entityTodo)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo with id %s from list with id %s, error %s", todoId, listId, err.Error())
+		return nil, err
+	}
+
+	return modelTodo, nil
 }
 
 func (s *service) checkWhetherUserHasAccessToTodo(ctx context.Context, userId string, listId string, desiredErr error) error {
-	todoListOwner, err := s.lService.GetListOwnerRecord(ctx, listId)
+	log.C(ctx).Info("checking whether user with id %s has access to todos from list with id %s", userId, listId)
+
+	todoListOwner, err := s.lRepo.GetListOwner(ctx, listId)
 	if err != nil {
 		log.C(ctx).Errorf("failed to create todo, error %s when trying to get list owner", err.Error())
 		return err
 	}
 
-	isCollaborator, err := s.lService.CheckWhetherUserIsCollaborator(ctx, listId, userId)
+	isCollaborator, err := s.lRepo.CheckWhetherUserIsCollaborator(ctx, listId, userId)
 	if err != nil {
-		log.C(ctx).Errorf("failed to create todo record, error %s when trying to chech whether user with id %s is collaborator", err.Error(), userId)
+		log.C(ctx).Errorf("failed to create todo record, error %s when trying to check whether user with id %s is collaborator", err.Error(), userId)
 		return err
 	}
 
-	if userId != todoListOwner.Id && !isCollaborator {
+	if userId != todoListOwner.Id.String() && !isCollaborator {
 		log.C(ctx).Debug("user is not owner and is not part of collaborators...")
 		return desiredErr
+	}
+
+	return nil
+}
+
+func (s *service) UnassignUserFromTodos(ctx context.Context, userId string, listId string) error {
+	log.C(ctx).Infof("unassigning user with id %s from todo from id %s", userId, listId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.tRepo.UnassignUserFromTodos(ctx, userId, listId); err != nil {
+		log.C(ctx).Errorf("failed to unassign user with id %s from todos of list with id %s, error %s", userId, listId, err.Error())
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to unassign user from todos, error %s", err.Error())
+		return err
 	}
 
 	return nil

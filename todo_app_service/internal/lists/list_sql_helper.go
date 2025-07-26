@@ -7,7 +7,7 @@ import (
 )
 
 var baseListGetQuery = "SELECT id,name,created_at,last_updated,owner,description FROM (SELECT * FROM lists ORDER BY id)"
-var baseCollaboratorsGetQuery = "WITH sorted_user_cte AS (SELECT users.id,users.email,users.role,list_id FROM users JOIN user_lists ON users.id = user_lists.user_id order by users.id) SELECT id, email, role FROM sorted_user_cte"
+var baseCollaboratorsGetQuery = "WITH sorted_user_cte AS (SELECT users.id,users.email,users.role,list_id FROM users JOIN user_lists ON users.id = user_lists.user_id ORDER BY users.id) SELECT id, email, role FROM sorted_user_cte"
 
 func parseSqlUpdateListQuery(sqlFields []string) string {
 	sqlQuery := fmt.Sprintf("UPDATE lists SET %s WHERE id = :id", strings.Join(sqlFields, ", "))

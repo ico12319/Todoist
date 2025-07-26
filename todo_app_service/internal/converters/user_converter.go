@@ -14,7 +14,7 @@ func NewUserConverter() *userConverter {
 	return &userConverter{}
 }
 
-func (*userConverter) ConvertFromDBEntityToModel(user *entities.User) *models.User {
+func (*userConverter) ToModel(user *entities.User) *models.User {
 	if user == nil {
 		return nil
 	}
@@ -26,7 +26,7 @@ func (*userConverter) ConvertFromDBEntityToModel(user *entities.User) *models.Us
 	}
 }
 
-func (*userConverter) ConvertFromModelToEntity(user *models.User) *entities.User {
+func (*userConverter) ToEntity(user *models.User) *entities.User {
 	return &entities.User{
 		Id:    uuid.FromStringOrNil(user.Id),
 		Email: user.Email,
@@ -59,7 +59,7 @@ func (u *userConverter) ManyToModel(users []entities.User) []*models.User {
 	modelUsers := make([]*models.User, 0, len(users))
 
 	for _, entity := range users {
-		model := u.ConvertFromDBEntityToModel(&entity)
+		model := u.ToModel(&entity)
 		modelUsers = append(modelUsers, model)
 	}
 

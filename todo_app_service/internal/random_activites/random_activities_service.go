@@ -10,7 +10,7 @@ import (
 	"net/http"
 )
 
-type httpRequester interface {
+type httpService interface {
 	NewRequestWithContext(ctx context.Context, method string, url string, body io.Reader) (*http.Request, error)
 }
 
@@ -20,11 +20,11 @@ type httpClient interface {
 
 type service struct {
 	apiUrl    string
-	requester httpRequester
+	requester httpService
 	client    httpClient
 }
 
-func NewService(apiUrl string, requester httpRequester, client httpClient) *service {
+func NewService(apiUrl string, requester httpService, client httpClient) *service {
 	return &service{
 		apiUrl:    apiUrl,
 		requester: requester,

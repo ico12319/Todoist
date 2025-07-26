@@ -4,11 +4,17 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gofrs/uuid"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 	"time"
 )
 
@@ -37,6 +43,13 @@ var (
 	mockExpiryTime                      = time.Now().Add(150 * time.Hour)
 	jwtKey                              = []byte("valid jwt key")
 	invalidJwt                          = []byte("invalid jwt")
+	jwtToken                            = "valid jwt token"
+	refreshToken                        = "valid refresh token"
+)
+
+var (
+	errInvalidRequestBody   = errors.New(constants.INVALID_REQUEST_BODY)
+	errWhenCallingJwtIssuer = errors.New("error when calling jwt issuer")
 )
 
 func initUser(userId string, email string) *models.User {
@@ -82,18 +95,49 @@ func initUserEntity(userId uuid.UUID, userEmail string) *entities.User {
 	}
 }
 
-func initClaims() *Claims {
-	return &Claims{
-		jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(mockIssuedTime),
-			ExpiresAt: jwt.NewNumericDate(mockExpiryTime),
-		},
+func getInjectedHandlerModelRefreshInRequestBody() *handler_models.Refresh {
+	return &handler_models.Refresh{
+		RefreshToken: refreshToken,
 	}
 }
 
-func initJwt(claims *Claims) *jwt.Token {
-	return &jwt.Token{
-		Method: jwt.SigningMethodHS256,
-		Claims: claims,
+func getExpectedCallbackResponse() *models.CallbackResponse {
+	return &models.CallbackResponse{
+		JwtToken:     jwtToken,
+		RefreshToken: refreshToken,
+	}
+}
+
+func extractErrorFromResponseRecorder(tb testing.TB, rr *httptest.ResponseRecorder, err error) {
+	tb.Helper()
+	var got map[string]string
+	require.NoError(tb, json.Unmarshal(rr.Body.Bytes(), &got))
+	expect := map[string]string{
+		"error": err.Error(),
+	}
+	require.Equal(tb, expect, got)
+}
+
+func extractCallbackResponseFromHttpRecorder(t *testing.T, rr *httptest.ResponseRecorder) *models.CallbackResponse {
+	t.Helper()
+	var callbackResponse models.CallbackResponse
+	err := json.NewDecoder(rr.Body).Decode(&callbackResponse)
+	require.NoError(t, err)
+
+	return &callbackResponse
+}
+
+func getValidHttpRequestWithInjectedHandlerModel(t *testing.T) *http.Request {
+	injectedHandlerModelRefreshBytes, err := json.Marshal(getInjectedHandlerModelRefreshInRequestBody())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/tokens/refresh", bytes.NewReader(injectedHandlerModelRefreshBytes))
+	return req
+}
+
+func getEmptyCallbackResponse() *models.CallbackResponse {
+	return &models.CallbackResponse{
+		JwtToken:     "",
+		RefreshToken: "",
 	}
 }

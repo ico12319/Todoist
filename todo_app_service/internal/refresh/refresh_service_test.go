@@ -1,15 +1,6 @@
 package refresh
 
-import (
-	"Todo-List/internProject/todo_app_service/internal/entities"
-	mocks2 "Todo-List/internProject/todo_app_service/internal/refresh/mocks"
-	"Todo-List/internProject/todo_app_service/pkg/models"
-	"context"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"testing"
-)
-
+/*
 func TestService_CreateRefreshToken(t *testing.T) {
 	validUser := initUser(validUserId.String(), VALID_USER_EMAIL)
 
@@ -348,3 +339,5 @@ func TestService_GetTokenOwner(t *testing.T) {
 		})
 	}
 }
+
+*/

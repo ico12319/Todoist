@@ -18,7 +18,7 @@ type tService interface {
 
 type lService interface {
 	GetListOwnerRecord(context.Context, string) (*models.User, error)
-	GetCollaborators(context.Context, *filters.ListFilters) ([]*models.User, error)
+	GetCollaborators(context.Context, string, *filters.BaseFilters) ([]*models.User, error)
 }
 
 type todoModifyMiddleware struct {
@@ -61,9 +61,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	collaborators, err := t.lService.GetCollaborators(ctx, &filters.ListFilters{
-		ListId: todo.ListId,
-	})
+	collaborators, err := t.lService.GetCollaborators(ctx, todo.ListId, &filters.BaseFilters{})
 
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s collaborators", err.Error(), todo.ListId)

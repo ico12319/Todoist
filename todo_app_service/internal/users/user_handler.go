@@ -27,11 +27,10 @@ type fieldsValidator interface {
 
 type handler struct {
 	service    userService
-	fValidator fieldsValidator
 }
 
-func NewHandler(service userService, fValidator fieldsValidator) *handler {
-	return &handler{service: service, fValidator: fValidator}
+func NewHandler(service userService) *handler {
+	return &handler{service: service}
 }
 
 func (h *handler) HandleGetUser(w http.ResponseWriter, r *http.Request) {

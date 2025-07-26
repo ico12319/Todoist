@@ -12,20 +12,22 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=activityConverter --exported --output=./mocks --outpkg=mocks --filename=activity_converter.go --with-expecter=true
 type activityConverter interface {
-	ToGQL(*models.RandomActivity) *gql.RandomActivity
+	ToGQL(activity *models.RandomActivity) *gql.RandomActivity
 }
 
-type httpResponseGetter interface {
-	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
+//go:generate mockery --name=httpService --exported --output=./mocks --outpkg=mocks --filename=http_service.go --with-expecter=true
+type httpService interface {
+	GetHttpResponse(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 type resolver struct {
 	restUrl        string
-	responseGetter httpResponseGetter
+	responseGetter httpService
 	converter      activityConverter
 }
 
-func NewResolver(restUrl string, responseGetter httpResponseGetter, converter activityConverter) *resolver {
+func NewResolver(restUrl string, responseGetter httpService, converter activityConverter) *resolver {
 	return &resolver{restUrl: restUrl, responseGetter: responseGetter, converter: converter}
 }
 

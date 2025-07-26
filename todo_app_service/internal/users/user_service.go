@@ -2,6 +2,7 @@ package users
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -19,13 +20,13 @@ type userRepo interface {
 	UpdateUser(context.Context, string, *entities.User) (*entities.User, error)
 	DeleteUser(context.Context, string) error
 	DeleteUsers(context.Context) error
-	GetTodosAssignedToUser(context.Context, sqlQueryRetriever) ([]entities.Todo, error)
+	GetTodosAssignedToUser(context.Context, string, sqlQueryRetriever) ([]entities.Todo, error)
 	GetUserLists(context.Context, sqlQueryRetriever) ([]entities.List, error)
 }
 
 type userConverter interface {
-	ConvertFromDBEntityToModel(*entities.User) *models.User
-	ConvertFromModelToEntity(*models.User) *entities.User
+	ToModel(*entities.User) *models.User
+	ToEntity(*models.User) *entities.User
 	ConvertFromUpdateModelToModel(*handler_models.UpdateUser) *models.User
 	ConvertFromCreateHandlerModelToModel(*handler_models.CreateUser) *models.User
 	ManyToModel([]entities.User) []*models.User
@@ -53,14 +54,32 @@ type service struct {
 	tConverter todoConverter
 	uuidGen    uuidGenerator
 	factory    sqlDecoratorFactory
+	transact   persistence.Transactioner
 }
 
-func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator, factory sqlDecoratorFactory) *service {
-	return &service{repo: repo, converter: converter, lConverter: lConverter, tConverter: tConverter, uuidGen: uuidGen, factory: factory}
+func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator, factory sqlDecoratorFactory, transact persistence.Transactioner) *service {
+	return &service{
+		repo:       repo,
+		converter:  converter,
+		lConverter: lConverter,
+		tConverter: tConverter,
+		uuidGen:    uuidGen,
+		factory:    factory,
+		transact:   transact,
+	}
 }
 
 func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) ([]*models.User, error) {
 	log.C(ctx).Info("getting users in user service")
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	baseQuery := `SELECT id,email,role FROM (SELECT id, email, role FROM users ORDER BY id)`
 
@@ -70,13 +89,20 @@ func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFil
 		return nil, err
 	}
 
-	entities, err := s.repo.GetUsers(ctx, decorator)
+	userEntities, err := s.repo.GetUsers(ctx, decorator)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get users in user service due to an error in user repository %s", err.Error())
 		return nil, err
 	}
 
-	return s.converter.ManyToModel(entities), nil
+	modelUsers := s.converter.ManyToModel(userEntities)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get user records, error %s", err.Error())
+		return nil, err
+	}
+
+	return modelUsers, nil
 }
 
 func (s *service) GetUserRecord(ctx context.Context, userId string) (*models.User, error) {
@@ -88,32 +114,62 @@ func (s *service) GetUserRecord(ctx context.Context, userId string) (*models.Use
 		return nil, err
 	}
 
-	return s.converter.ConvertFromDBEntityToModel(entity), nil
+	return s.converter.ToModel(entity), nil
 }
 
 func (s *service) GetUserRecordByEmail(ctx context.Context, email string) (*models.User, error) {
 	log.C(ctx).Infof("getting user by email %s in user service", email)
 
-	entity, err := s.repo.GetUserByEmail(ctx, email)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	userEntity, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get user by email %s in user service due to an error in user repository", email)
 		return nil, err
 	}
 
-	return s.converter.ConvertFromDBEntityToModel(entity), nil
+	userModel := s.converter.ToModel(userEntity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get user by email %s, error %s", userModel, err.Error())
+		return nil, err
+	}
+
+	return userModel, nil
 }
 
 func (s *service) CreateUserRecord(ctx context.Context, user *handler_models.CreateUser) (*models.User, error) {
 	log.C(ctx).Info("creating user in user service")
 
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	createModel := s.converter.ConvertFromCreateHandlerModelToModel(user)
 	createModel.Id = s.uuidGen.Generate()
 
-	convertedEntity := s.converter.ConvertFromModelToEntity(createModel)
+	convertedEntity := s.converter.ToEntity(createModel)
 
-	_, err := s.repo.CreateUser(ctx, convertedEntity)
+	_, err = s.repo.CreateUser(ctx, convertedEntity)
 	if err != nil {
 		log.C(ctx).Errorf("failed to create user in user service, error %s when calling user repo", err.Error())
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to create user, error %s", err.Error())
 		return nil, err
 	}
 
@@ -123,8 +179,22 @@ func (s *service) CreateUserRecord(ctx context.Context, user *handler_models.Cre
 func (s *service) DeleteUserRecord(ctx context.Context, id string) error {
 	log.C(ctx).Infof("deleting user with id %s in user service", id)
 
-	if err := s.repo.DeleteUser(ctx, id); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.repo.DeleteUser(ctx, id); err != nil {
 		log.C(ctx).Errorf("failed to update user in user service, error %s when calling user repo", err.Error())
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete user with id %s, error %s", id, err.Error())
 		return err
 	}
 
@@ -134,13 +204,41 @@ func (s *service) DeleteUserRecord(ctx context.Context, id string) error {
 func (s *service) DeleteUsers(ctx context.Context) error {
 	log.C(ctx).Info("deleting users in user service")
 
-	return s.repo.DeleteUsers(ctx)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.repo.DeleteUsers(ctx); err != nil {
+		log.C(ctx).Errorf("failed to delete users, error %s", err.Error())
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete users, error %s", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) UpdateUserRecord(ctx context.Context, id string, user *models.User) (*models.User, error) {
 	log.C(ctx).Infof("updating user with id %s in user service", id)
 
-	convertedEntity := s.converter.ConvertFromModelToEntity(user)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	convertedEntity := s.converter.ToEntity(user)
 
 	updatedEntity, err := s.repo.UpdateUser(ctx, id, convertedEntity)
 	if err != nil {
@@ -148,11 +246,27 @@ func (s *service) UpdateUserRecord(ctx context.Context, id string, user *models.
 		return nil, err
 	}
 
-	return s.converter.ConvertFromDBEntityToModel(updatedEntity), nil
+	updatedModel := s.converter.ToModel(updatedEntity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to update user with id %s, error %s", id, err.Error())
+		return nil, err
+	}
+
+	return updatedModel, nil
 }
 
 func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user *handler_models.UpdateUser) (*models.User, error) {
 	log.C(ctx).Infof("updating user with with id %s in user service", id)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	convertedModel := s.converter.ConvertFromUpdateModelToModel(user)
 
@@ -167,11 +281,27 @@ func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user
 		return nil, err
 	}
 
-	return s.converter.ConvertFromDBEntityToModel(updatedEntity), nil
+	updatedModel := s.converter.ToModel(updatedEntity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to update user with id %s partially, error %s", id, err.Error())
+		return nil, err
+	}
+
+	return updatedModel, nil
 }
 
 func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) ([]*models.List, error) {
 	log.C(ctx).Info("getting lists where user participates in user service")
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	if _, err := s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get user lists, error %s when calling user repo", err.Error())
@@ -196,13 +326,29 @@ func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilte
 		return nil, err
 	}
 
-	return s.lConverter.ManyToModel(listEntities), nil
+	listModels := s.lConverter.ManyToModel(listEntities)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get user lists, error %s", err.Error())
+		return nil, err
+	}
+
+	return listModels, nil
 }
 
 func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) ([]*models.Todo, error) {
 	log.C(ctx).Info("getting todos assigned to user in user service")
 
-	if _, err := s.repo.GetUser(ctx, userId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get todos assigned to user, error %s when calling user repo", err.Error())
 		return nil, err
 	}
@@ -214,7 +360,7 @@ func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, use
 				   JOIN users ON todos.assigned_to = users.id ORDER BY todos.id
  			      )
 				SELECT id, name, description, list_id, status, created_at,
-				last_updated, assigned_to, due_date, priority FROM sorted_todo_cte`
+				last_updated, assigned_to, due_date, priority FROM sorted_todo_cte WHERE user_id = $1`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseQuery)
 	if err != nil {
@@ -222,11 +368,18 @@ func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, use
 		return nil, err
 	}
 
-	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, decorator)
+	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, userId, decorator)
 	if err != nil {
 		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling repo")
 		return nil, err
 	}
 
-	return s.tConverter.ManyToModel(todoEntities), nil
+	todoModels := s.tConverter.ManyToModel(todoEntities)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todos assigned to user with id %s, error %s", userId, err.Error())
+		return nil, err
+	}
+
+	return todoModels, nil
 }

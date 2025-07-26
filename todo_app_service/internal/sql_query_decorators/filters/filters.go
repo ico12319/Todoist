@@ -31,23 +31,6 @@ func (t *TodoFilters) GetFilters() map[string]string {
 	}
 }
 
-type ListFilters struct {
-	BaseFilters
-	ListId string
-}
-
-func (l *ListFilters) GetFilters() map[string]string {
-	return map[string]string{
-		constants.LIMIT:  l.Limit,
-		constants.CURSOR: l.Cursor,
-	}
-}
-
-type RolePair struct {
-	roleType string
-	id       string
-}
-
 type UserFilters struct {
 	BaseFilters
 	OwnerId       string

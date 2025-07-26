@@ -16,7 +16,7 @@ import (
 )
 
 type httpResponseGetter interface {
-	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
+	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
@@ -68,7 +68,7 @@ func (r *resolver) Users(ctx context.Context, filters *url_filters.BaseFilters) 
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -105,7 +105,7 @@ func (r *resolver) User(ctx context.Context, id string) (*gql.User, error) {
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -152,7 +152,7 @@ func (r *resolver) DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -175,7 +175,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *u
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -214,7 +214,7 @@ func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *ur
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -251,7 +251,7 @@ func (r *resolver) DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, e
 
 	url := r.restUrl + gql_constants.USER_PATH
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodDelete, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -266,7 +266,7 @@ func (r *resolver) getUsers(ctx context.Context) ([]*gql.User, error) {
 
 	url := r.restUrl + gql_constants.USER_PATH
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodGet, url, nil)
+	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err

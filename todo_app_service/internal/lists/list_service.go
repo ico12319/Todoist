@@ -2,6 +2,7 @@ package lists
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -16,7 +17,7 @@ import (
 type listRepo interface {
 	GetLists(context.Context, sql_query_decorators.SqlQueryRetriever) ([]entities.List, error)
 	GetList(context.Context, string) (*entities.List, error)
-	GetListCollaborators(context.Context, sql_query_decorators.SqlQueryRetriever) ([]entities.User, error)
+	GetListCollaborators(context.Context, string, sql_query_decorators.SqlQueryRetriever) ([]entities.User, error)
 	GetListOwner(context.Context, string) (*entities.User, error)
 	DeleteList(context.Context, string) error
 	DeleteLists(context.Context) error
@@ -25,6 +26,10 @@ type listRepo interface {
 	UpdateListSharedWith(context.Context, string, string) error
 	DeleteCollaborator(context.Context, string, string) error
 	CheckWhetherUserIsCollaborator(context.Context, string, string) (bool, error)
+}
+
+type todoRepo interface {
+	UnassignUserFromTodos(ctx context.Context, userId string, listId string) error
 }
 
 //go:generate mockery --name=uuidGenerator --exported --output=./mocks --outpkg=mocks --filename=uuid_generator.go --with-expecter=true
@@ -39,8 +44,8 @@ type timeGenerator interface {
 
 //go:generate mockery --name=listConverter --exported --output=./mocks --outpkg=mocks --filename=list_converter.go --with-expecter=true
 type listConverter interface {
-	ConvertFromDBEntityToModel(*entities.List) *models.List
-	ConvertFromModelToDBEntity(*models.List) *entities.List
+	ToModel(*entities.List) *models.List
+	ToEntity(*models.List) *entities.List
 	ManyToModel([]entities.List) []*models.List
 	FromUpdateHandlerModelToModel(*handler_models.UpdateList) *models.List
 	FromCreateHandlerModelToModel(*handler_models.CreateList) *models.List
@@ -48,14 +53,14 @@ type listConverter interface {
 
 //go:generate mockery --name=userConverter --exported --output=./mocks --outpkg=mocks --filename=user_converter.go --with-expecter=true
 type userConverter interface {
-	ConvertFromDBEntityToModel(*entities.User) *models.User
-	ConvertFromModelToEntity(*models.User) *entities.User
+	ToModel(*entities.User) *models.User
+	ToEntity(*models.User) *entities.User
 	ManyToModel([]entities.User) []*models.User
 }
 
 //go:generate mockery --name=userService --exported --output=./mocks --outpkg=mocks --filename=user_service.go --with-expecter=true
-type userService interface {
-	GetUserRecord(context.Context, string) (*models.User, error)
+type userRepo interface {
+	GetUser(context.Context, string) (*entities.User, error)
 }
 
 //go:generate mockery --name=sqlDecoratorFactory --exported --output=./mocks --outpkg=mocks --filename=sql_decorator_factory.go --with-expecter=true
@@ -65,22 +70,42 @@ type sqlDecoratorFactory interface {
 
 type service struct {
 	lRepo      listRepo
-	uService   userService
+	uRepo      userRepo
+	tRepo      todoRepo
 	uuidGen    uuidGenerator
 	timeGen    timeGenerator
 	lConverter listConverter
 	uConverter userConverter
 	factory    sqlDecoratorFactory
+	transact   persistence.Transactioner
 }
 
 func NewService(repo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
-	listConverter listConverter, uService userService, userConverter userConverter, factory sqlDecoratorFactory) *service {
-	return &service{lRepo: repo, uuidGen: uuidGen, timeGen: timeGen,
-		lConverter: listConverter, uService: uService, uConverter: userConverter, factory: factory}
+	listConverter listConverter, uRep userRepo, tRepo todoRepo, userConverter userConverter, factory sqlDecoratorFactory, transact persistence.Transactioner) *service {
+	return &service{
+		lRepo:      repo,
+		uuidGen:    uuidGen,
+		timeGen:    timeGen,
+		lConverter: listConverter,
+		uRepo:      uRep,
+		uConverter: userConverter,
+		factory:    factory,
+		tRepo:      tRepo,
+		transact:   transact,
+	}
 }
 
-func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.ListFilters) ([]*models.List, error) {
+func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.BaseFilters) ([]*models.List, error) {
 	log.C(ctx).Info("getting lists from list service")
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	baseQuery := `SELECT id,name,created_at,last_updated,owner,description FROM (SELECT * FROM lists ORDER BY id)`
 
@@ -96,21 +121,52 @@ func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.ListFil
 		return nil, err
 	}
 
-	return s.lConverter.ManyToModel(listEntities), nil
+	modelLists := s.lConverter.ManyToModel(listEntities)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get lists, error %s", err.Error())
+		return nil, nil
+	}
+
+	return modelLists, nil
 }
 
 func (s *service) DeleteListRecord(ctx context.Context, listId string) error {
 	log.C(ctx).Infof("deleting with id %s list record from list service layer", listId)
 
-	if err := s.lRepo.DeleteList(ctx, listId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.lRepo.DeleteList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to delete list with id %s, error %s when calling list repo", listId, err.Error())
 		return fmt.Errorf("failed to delete list with id %s", listId)
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete list with id %s, error %s", listId, err.Error())
+		return err
+	}
+
 	return nil
 }
 
 func (s *service) CreateListRecord(ctx context.Context, list *handler_models.CreateList, owner string) (*models.List, error) {
 	log.C(ctx).Info("creating list record in list service layer")
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	modelList := s.lConverter.FromCreateHandlerModelToModel(list)
 
@@ -123,10 +179,15 @@ func (s *service) CreateListRecord(ctx context.Context, list *handler_models.Cre
 		Owner:       owner,
 	}
 
-	convertedEntity := s.lConverter.ConvertFromModelToDBEntity(newlyCreatedList)
+	convertedEntity := s.lConverter.ToEntity(newlyCreatedList)
 
-	if _, err := s.lRepo.CreateList(ctx, convertedEntity); err != nil {
+	if _, err = s.lRepo.CreateList(ctx, convertedEntity); err != nil {
 		log.C(ctx).Errorf("failed to create list, error %s when calling list repo", err.Error())
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to create list with id %s, error %s", newlyCreatedList.Id, err.Error())
 		return nil, err
 	}
 
@@ -135,6 +196,15 @@ func (s *service) CreateListRecord(ctx context.Context, list *handler_models.Cre
 
 func (s *service) UpdateListPartiallyRecord(ctx context.Context, listId string, list *handler_models.UpdateList) (*models.List, error) {
 	log.C(ctx).Infof("updating list with id %s in list service ", listId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	modelList := s.lConverter.FromUpdateHandlerModelToModel(list)
 
@@ -149,13 +219,29 @@ func (s *service) UpdateListPartiallyRecord(ctx context.Context, listId string, 
 		return nil, err
 	}
 
-	return s.lConverter.ConvertFromDBEntityToModel(entity), nil
+	readyModel := s.lConverter.ToModel(entity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to update list with id %s partially, error %s", list, err.Error())
+		return nil, err
+	}
+
+	return readyModel, nil
 }
 
 func (s *service) AddCollaborator(ctx context.Context, listId string, userId string) (*models.User, error) {
 	log.C(ctx).Debugf("adding collaborator with id %s in list with id %s", userId, listId)
 
-	user, err := s.uService.GetUserRecord(ctx, userId)
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	user, err := s.uRepo.GetUser(ctx, userId)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get user with id %s, error when calling user repo function", userId)
 		return nil, err
@@ -166,56 +252,127 @@ func (s *service) AddCollaborator(ctx context.Context, listId string, userId str
 		return nil, err
 	}
 
-	return user, nil
+	modelUser := s.uConverter.ToModel(user)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to add user with id %s as collaborator in list with id %s, error %s", userId, listId, err.Error())
+		return nil, err
+	}
+
+	return modelUser, nil
 }
 
 func (s *service) DeleteCollaborator(ctx context.Context, listId string, userId string) error {
 	log.C(ctx).Infof("deleting a collaborator with id %s from list with id %s in list service", userId, listId)
 
-	if _, err := s.lRepo.GetList(ctx, listId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to delete collaborator with id %s, error %s when calling list repo", userId, err.Error())
 		return err
 	}
 
-	if err := s.lRepo.DeleteCollaborator(ctx, listId, userId); err != nil {
+	if err = s.lRepo.DeleteCollaborator(ctx, listId, userId); err != nil {
 		log.C(ctx).Errorf("failed to delete a collaborator with id %s from a list with id %s, error in list repo", userId, listId)
+		return err
+	}
+
+	if err = s.tRepo.UnassignUserFromTodos(ctx, userId, listId); err != nil {
+		log.C(ctx).Errorf("failed to unassign user with id %s from todos from list with id %s, error %s", userId, listId, err.Error())
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (s *service) DeleteLists(ctx context.Context) error {
+	log.C(ctx).Info("deleting lists in list service")
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = s.lRepo.DeleteLists(ctx); err != nil {
+		log.C(ctx).Errorf("failed to delete lists, error %s", err.Error())
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transation when trying to delete lists, error %s", err.Error())
 		return err
 	}
 
 	return nil
 }
 
-func (s *service) DeleteLists(ctx context.Context) error {
-	log.C(ctx).Info("deleting lists in list service")
-
-	return s.lRepo.DeleteLists(ctx)
-}
-
-func (s *service) GetCollaborators(ctx context.Context, lFilters *filters.ListFilters) ([]*models.User, error) {
+func (s *service) GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) ([]*models.User, error) {
 	log.C(ctx).Info("getting list collaborators from list service")
 
-	if _, err := s.lRepo.GetList(ctx, lFilters.ListId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to get list collaborators, error %s when calling list repo", err.Error())
 		return nil, err
 	}
 
-	sqlQueryBuilder, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseCollaboratorsGetQuery)
+	baseQuery := `WITH sorted_user_cte AS( 
+					SELECT users.id,users.email,users.role,list_id FROM users 
+					JOIN user_lists ON users.id = user_lists.user_id ORDER BY users.id
+				   ) 
+					SELECT id, email, role FROM sorted_user_cte WHERE list_id = $1`
+
+	sqlQueryBuilder, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get collaborators, error when calling decorator factory")
 		return nil, err
 	}
 
-	entitiesCollaborators, err := s.lRepo.GetListCollaborators(ctx, sqlQueryBuilder)
+	entitiesCollaborators, err := s.lRepo.GetListCollaborators(ctx, listId, sqlQueryBuilder)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list collaborators, error %s when calling list repo", err.Error())
 		return nil, err
 	}
 
-	return s.uConverter.ManyToModel(entitiesCollaborators), nil
+	modelCollaborators := s.uConverter.ManyToModel(entitiesCollaborators)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get collaborators of list with id %s, error %s", listId, err.Error())
+		return nil, err
+	}
+
+	return modelCollaborators, nil
 }
 
 func (s *service) GetListRecord(ctx context.Context, listId string) (*models.List, error) {
 	log.C(ctx).Infof("getting list with id %s from list service", listId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listEntity, err := s.lRepo.GetList(ctx, listId)
 	if err != nil {
@@ -223,11 +380,27 @@ func (s *service) GetListRecord(ctx context.Context, listId string) (*models.Lis
 		return nil, err
 	}
 
-	return s.lConverter.ConvertFromDBEntityToModel(listEntity), nil
+	modelList := s.lConverter.ToModel(listEntity)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get list with id %s, error %s", listId, err.Error())
+		return nil, err
+	}
+
+	return modelList, nil
 }
 
 func (s *service) GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error) {
 	log.C(ctx).Infof("getting list owner of list with id %s from list service", listId)
+
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return nil, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	entityOwner, err := s.lRepo.GetListOwner(ctx, listId)
 	if err != nil {
@@ -235,16 +408,43 @@ func (s *service) GetListOwnerRecord(ctx context.Context, listId string) (*model
 		return nil, err
 	}
 
-	return s.uConverter.ConvertFromDBEntityToModel(entityOwner), nil
+	modelOwner := s.uConverter.ToModel(entityOwner)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get the owner of list with id %s, error %s", listId, err.Error())
+		return nil, err
+	}
+
+	return modelOwner, nil
 }
 
 func (s *service) CheckWhetherUserIsCollaborator(ctx context.Context, listId string, userId string) (bool, error) {
 	log.C(ctx).Infof("checking whether a user with id %s is collaborator in list with id %s", userId, listId)
 
-	if _, err := s.uService.GetUserRecord(ctx, userId); err != nil {
+	tx, err := s.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
+		return false, err
+	}
+	defer s.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if _, err = s.uRepo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to check whether user with id %s is collaborator, error %s when trying to get it", userId, err.Error())
 		return false, err
 	}
 
-	return s.lRepo.CheckWhetherUserIsCollaborator(ctx, listId, userId)
+	isCollaborator, err := s.lRepo.CheckWhetherUserIsCollaborator(ctx, listId, userId)
+	if err != nil {
+		log.C(ctx).Errorf("failed to check whether user with id %s is collaorator in list with id %s, error %s", userId, listId, err.Error())
+		return false, nil
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to check whether user with id %s is collaborator in list with id %s , error %s", userId, listId, err.Error())
+		return false, err
+	}
+
+	return isCollaborator, nil
 }

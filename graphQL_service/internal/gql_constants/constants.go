@@ -37,3 +37,9 @@ const (
 	TYPE     = "overdue"
 	ROLE     = "role"
 )
+
+const (
+	API_ENDPOINT    = "/api"
+	HEALTH_ENDPOINT = "/healthz"
+	READY_ENDPOINT  = "/readyz"
+)

@@ -1,4 +1,4 @@
-package gql_http_helpers
+package http_helpers
 
 import "encoding/json"
 
