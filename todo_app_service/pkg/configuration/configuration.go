@@ -20,6 +20,7 @@ type Config struct {
 	OauthConfig    *oauth2.Config
 	JwtConfig      jwtConfig
 	ActivityConfig activityConfig
+	CorsConfig     corsConfig
 }
 
 var (
@@ -40,7 +41,7 @@ func init() {
 	if err := godotenv.Load("/Users/I763039/Library/CloudStorage/OneDrive-SAPSE/Documents/GitHub/Todo-List/internProject/.env"); err != nil {
 		panic(err)
 	}
-
+	
 	if err := envconfig.Process("", &config.LogConfig); err != nil {
 		panic(err)
 	}
@@ -76,6 +77,10 @@ func init() {
 	}
 
 	if err = envconfig.Process("", &config.ActivityConfig); err != nil {
+		panic(err)
+	}
+
+	if err = envconfig.Process("", &config.CorsConfig); err != nil {
 		panic(err)
 	}
 }

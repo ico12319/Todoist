@@ -15,46 +15,51 @@ import (
 	"net/http"
 )
 
-type httpResponseGetter interface {
-	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
+//go:generate mockery --name=httpService --exported --output=./mocks --outpkg=mocks --filename=http_service.go --with-expecter=true
+type httpService interface {
+	GetHttpResponseWithAuthHeader(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 
+//go:generate mockery --name=urlDecoratorFactory --exported --output=./mocks --outpkg=mocks --filename=url_decorator_factory.go --with-expecter=true
 type urlDecoratorFactory interface {
-	CreateUrlDecorator(context.Context, string, url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
+	CreateUrlDecorator(ctx context.Context, serverAddress string, uFilters url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
 }
 
+//go:generate mockery --name=userConverter --exported --output=./mocks --outpkg=mocks --filename=user_converter.go --with-expecter=true
 type userConverter interface {
-	ToGQL(*models.User) *gql.User
-	ManyToGQL([]*models.User) []*gql.User
-	FromGQLToDeleteUserPayload(*gql.User, bool) *gql.DeleteUserPayload
-	ManyFromGQLToDeleteUserPayload([]*gql.User, bool) []*gql.DeleteUserPayload
+	ToGQL(user *models.User) *gql.User
+	ToUserPageGQL(userPage *models.UserPage) *gql.UserPage
+	FromGQLToDeleteUserPayload(user *gql.User, success bool) *gql.DeleteUserPayload
+	ManyFromGQLToDeleteUserPayload(users []*gql.User, success bool) []*gql.DeleteUserPayload
 }
 
+//go:generate mockery --name=todoConverter --exported --output=./mocks --outpkg=mocks --filename=todo_converter.go --with-expecter=true
 type todoConverter interface {
-	ManyToGQL([]*models.Todo) []*gql.Todo
+	ToTodoPageGQL(todoPage *models.TodoPage) *gql.TodoPage
 }
 
+//go:generate mockery --name=listConverter --exported --output=./mocks --outpkg=mocks --filename=list_converter.go --with-expecter=true
 type listConverter interface {
-	ManyToGQL([]*models.List) []*gql.List
+	ToListPageGQL(listPage *models.ListPage) *gql.ListPage
 }
 
 type resolver struct {
-	uConverter     userConverter
-	lConverter     listConverter
-	tConverter     todoConverter
-	factory        urlDecoratorFactory
-	restUrl        string
-	responseGetter httpResponseGetter
+	uConverter  userConverter
+	lConverter  listConverter
+	tConverter  todoConverter
+	factory     urlDecoratorFactory
+	restUrl     string
+	httpService httpService
 }
 
-func NewResolver(uConverter userConverter, lConverter listConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, responseGetter httpResponseGetter) *resolver {
+func NewResolver(uConverter userConverter, lConverter listConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, httpService httpService) *resolver {
 	return &resolver{
-		uConverter:     uConverter,
-		lConverter:     lConverter,
-		tConverter:     tConverter,
-		restUrl:        restUrl,
-		factory:        factory,
-		responseGetter: responseGetter,
+		uConverter:  uConverter,
+		lConverter:  lConverter,
+		tConverter:  tConverter,
+		restUrl:     restUrl,
+		factory:     factory,
+		httpService: httpService,
 	}
 }
 
@@ -68,7 +73,7 @@ func (r *resolver) Users(ctx context.Context, filters *url_filters.BaseFilters) 
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -80,23 +85,13 @@ func (r *resolver) Users(ctx context.Context, filters *url_filters.BaseFilters) 
 		return nil, err
 	}
 
-	var users []*models.User
-	if err = json.NewDecoder(resp.Body).Decode(&users); err != nil {
+	var userPage models.UserPage
+	if err = json.NewDecoder(resp.Body).Decode(&userPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlUsers := r.uConverter.ManyToGQL(users)
-
-	pageInfo := utils.InitPageInfo[*gql.User](gqlUsers, func(user *gql.User) string {
-		return user.ID
-	})
-
-	return &gql.UserPage{
-		Data:       gqlUsers,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlUsers)),
-	}, nil
+	return r.uConverter.ToUserPageGQL(&userPage), nil
 }
 
 func (r *resolver) User(ctx context.Context, id string) (*gql.User, error) {
@@ -105,7 +100,7 @@ func (r *resolver) User(ctx context.Context, id string) (*gql.User, error) {
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -152,22 +147,31 @@ func (r *resolver) DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.USER_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
-		return nil, err
+		return &gql.DeleteUserPayload{
+			Success: false,
+		}, err
 	}
 	defer resp.Body.Close()
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to delete user with id %s in user resolver, error %s", id, err.Error())
+		return &gql.DeleteUserPayload{
+			Success: false,
+		}, err
+	}
 
 	return r.uConverter.FromGQLToDeleteUserPayload(gqlUser, true), nil
 }
 
-func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.TodoFilters) (*gql.TodoPage, error) {
+func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, filters *url_filters.TodoFilters) (*gql.TodoPage, error) {
 	log.C(ctx).Infof("getting todo assigned to user with id %s", obj.ID)
 
 	formattedSuffix := fmt.Sprintf("/%s", obj.ID)
 
-	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.USER_PATH+formattedSuffix+gql_constants.TODO_PATH, baseFilters)
+	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.USER_PATH+formattedSuffix+gql_constants.TODO_PATH, filters)
 
 	url, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
 	if err != nil {
@@ -175,30 +179,30 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, baseFilters *u
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	modelTodos, err := utils.DecodeJsonResponse[[]*models.Todo](resp)
-	if err != nil {
-		log.C(ctx).Error("failed to decode http response body")
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Warn("http status code not found when trying to see to which todos user is assigned...")
+		return nil, nil
+	}
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get lists where user participates, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlTodos := r.tConverter.ManyToGQL(modelTodos)
+	var todoPage models.TodoPage
+	if err = json.NewDecoder(resp.Body).Decode(&todoPage); err != nil {
+		log.C(ctx).Error("failed to get todos to which user is assigned to , error when trying to decode JSON")
+		return nil, err
+	}
 
-	pageInfo := utils.InitPageInfo[*gql.Todo](gqlTodos, func(todo *gql.Todo) string {
-		return todo.ID
-	})
-
-	return &gql.TodoPage{
-		Data:       gqlTodos,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlTodos)),
-	}, nil
+	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
 func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.UserFilters) (*gql.ListPage, error) {
@@ -214,30 +218,30 @@ func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *ur
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	lists, err := utils.DecodeJsonResponse[[]*models.List](resp)
-	if err != nil {
+	if resp.StatusCode == http.StatusNotFound {
+		log.C(ctx).Warn("http status code not found when trying to see in which lists user participates...")
+		return nil, nil
+	}
+
+	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
+		log.C(ctx).Errorf("failed to get lists where user participates, error %s", err.Error())
+		return nil, err
+	}
+
+	var listPage models.ListPage
+	if err = json.NewDecoder(resp.Body).Decode(&listPage); err != nil {
 		log.C(ctx).Errorf("failed to get lists shared with user with id %s, error when trying to decode JSON", obj.ID)
 		return nil, err
 	}
 
-	gqlLists := r.lConverter.ManyToGQL(lists)
-
-	pageInfo := utils.InitPageInfo[*gql.List](gqlLists, func(list *gql.List) string {
-		return list.ID
-	})
-
-	return &gql.ListPage{
-		Data:       gqlLists,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlLists)),
-	}, nil
+	return r.lConverter.ToListPageGQL(&listPage), nil
 }
 
 func (r *resolver) DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, error) {
@@ -246,27 +250,35 @@ func (r *resolver) DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, e
 	gqlUsers, err := r.getUsers(ctx)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete users, error %s when trying to get them", err.Error())
-		return nil, err
+		return []*gql.DeleteUserPayload{
+			{
+				Success: false,
+			},
+		}, err
 	}
 
 	url := r.restUrl + gql_constants.USER_PATH
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
-		return nil, err
+		return []*gql.DeleteUserPayload{
+			{
+				Success: false,
+			},
+		}, err
 	}
 	defer resp.Body.Close()
 
-	return r.uConverter.ManyFromGQLToDeleteUserPayload(gqlUsers, true), nil
+	return r.uConverter.ManyFromGQLToDeleteUserPayload(gqlUsers.Data, true), nil
 }
 
-func (r *resolver) getUsers(ctx context.Context) ([]*gql.User, error) {
+func (r *resolver) getUsers(ctx context.Context) (*gql.UserPage, error) {
 	log.C(ctx).Info("getting users without filters in user resolver")
 
 	url := r.restUrl + gql_constants.USER_PATH
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
 		return nil, err
@@ -278,11 +290,11 @@ func (r *resolver) getUsers(ctx context.Context) ([]*gql.User, error) {
 		return nil, err
 	}
 
-	var users []*models.User
-	if err = json.NewDecoder(resp.Body).Decode(&users); err != nil {
+	var userPage models.UserPage
+	if err = json.NewDecoder(resp.Body).Decode(&userPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	return r.uConverter.ManyToGQL(users), nil
+	return r.uConverter.ToUserPageGQL(&userPage), nil
 }

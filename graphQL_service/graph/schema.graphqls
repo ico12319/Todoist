@@ -40,8 +40,8 @@ type User{
   id: ID!
   email: String!
   role: UserRole @hasRole
-  assigned_to(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
-  participate_in(filter: UserRoleFilter, limit: Int = 100, after: ID): ListPage!
+  assignedTo(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
+  participateIn(filter: UserRoleFilter, limit: Int = 100, after: ID): ListPage!
 }
 
 type Todo{
@@ -50,11 +50,11 @@ type Todo{
   description: String!
   list: List!
   status: TodoStatus!
-  created_at: Time!
-  last_updated: Time!
+  createdAt: Time!
+  lastUpdated: Time!
   priority: Priority!
-  assigned_to: User
-  due_data: Time
+  assignedTo: User
+  dueData: Time
 }
 
 type List{
@@ -76,8 +76,8 @@ type RandomActivity{
 }
 
 type Access{
-  jwt_token: String!
-  refresh_token: String!
+  jwtToken: String!
+  refreshToken: String!
 }
 
 input TodosFilterInput{
@@ -94,10 +94,10 @@ input CreateListInput{
 input CreateTodoInput{
   name: String!
   description: String!
-  list_id: ID!
+  listId: ID!
   priority: Priority!
-  assigned_to: ID
-  due_date: Time
+  assignedTo: ID
+  dueDate: Time
 }
 
 input UpdateTodoInput{
@@ -105,8 +105,8 @@ input UpdateTodoInput{
   description: String
   status: TodoStatus
   priority: Priority
-  assigned_to: ID
-  due_date: Time
+  assignedTo: ID
+  dueDate: Time
 }
 
 input UpdateListInput{
@@ -120,10 +120,10 @@ type DeleteTodoPayload{
   name: String
   description: String
   status: TodoStatus
-  created_at: Time
-  last_updated: Time
+  createdAt: Time
+  lastUpdated: Time
   priority: Priority
-  due_data: Time
+  dueDate: Time
 }
 
 type DeleteUserPayload{
@@ -145,34 +145,36 @@ type DeleteListPayload{
 type PageInfo{
   startCursor: ID!
   endCursor: ID!
+  hasNextPage: Boolean!
+  hasPrevPage: Boolean!
 }
 
 interface Pageable{
-  page_info: PageInfo
-  total_count: Int!
+  pageInfo: PageInfo
+  totalCount: Int!
 }
 
 type TodoPage implements Pageable{
   data: [Todo!]!
-  page_info: PageInfo
-  total_count: Int!
+  pageInfo: PageInfo
+  totalCount: Int!
 }
 
 type ListPage implements Pageable{
   data: [List!]!
-  page_info: PageInfo
-  total_count: Int!
+  pageInfo: PageInfo
+  totalCount: Int!
 }
 
 type UserPage implements Pageable{
   data: [User!]!
-  page_info: PageInfo
-  total_count: Int!
+  pageInfo: PageInfo
+  totalCount: Int!
 }
 
 input CollaboratorInput{
-  list_id: ID!
-  user_id: ID!
+  listId: ID!
+  userEmail: String!
 }
 
 type CreateCollaboratorPayload{
@@ -182,13 +184,13 @@ type CreateCollaboratorPayload{
 }
 
 type DeleteCollaboratorPayload{
-  list_id: ID!
-  user_id: ID!
+  listId: ID!
+  userEmail: String!
   success: Boolean!
 }
 
 input RefreshTokenInput{
-  refresh_token: String!
+  refreshToken: String!
 }
 
 type Query{

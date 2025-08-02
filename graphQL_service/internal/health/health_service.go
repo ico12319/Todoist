@@ -9,35 +9,23 @@ import (
 )
 
 type httpService interface {
-	NewRequestWithContext(ctx context.Context, httpMethod string, url string, reader io.Reader) (*http.Request, error)
-}
-
-type httpClient interface {
-	Do(r *http.Request) (*http.Response, error)
+	GetHttpResponse(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 
 type service struct {
-	requester httpService
-	client    httpClient
+	httpService httpService
 }
 
-func NewService(requester httpService, client httpClient) *service {
+func NewService(httpService httpService) *service {
 	return &service{
-		requester: requester,
-		client:    client,
+		httpService: httpService,
 	}
 }
 
 func (s *service) CheckRESTProbes(ctx context.Context, url string) error {
 	log.C(ctx).Info("checking whether REST api is alive in health service in GQL")
 
-	req, err := s.requester.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		log.C(ctx).Errorf("failed to make http request to REST api in health service in GQL, error %s", err.Error())
-		return err
-	}
-
-	resp, err := s.client.Do(req)
+	resp, err := s.httpService.GetHttpResponse(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to receive http response from REST api in health service in GQL, error %s", err.Error())
 		return err

@@ -11,15 +11,15 @@ import (
 
 //go:generate mockery --name=refreshRepository --exported --output=./mocks --outpkg=mocks --filename=refresh_repository.go --with-expecter=true
 type refreshRepository interface {
-	CreateRefreshToken(context.Context, *entities.Refresh) (*entities.Refresh, error)
-	UpdateRefreshToken(context.Context, string, string) (*entities.Refresh, error)
-	GetTokenOwner(context.Context, string) (*entities.User, error)
+	CreateRefreshToken(ctx context.Context, refresh *entities.Refresh) (*entities.Refresh, error)
+	UpdateRefreshToken(ctx context.Context, refreshToken string, userId string) (*entities.Refresh, error)
+	GetTokenOwner(ctx context.Context, refreshToken string) (*entities.User, error)
 }
 
 //go:generate mockery --name=converter --exported --output=./mocks --outpkg=mocks --filename=converter.go --with-expecter=true
 type converter interface {
-	ToEntity(*models.Refresh) *entities.Refresh
-	ToModel(*entities.Refresh) *models.Refresh
+	ToEntity(refresh *models.Refresh) *entities.Refresh
+	ToModel(refresh *entities.Refresh) *models.Refresh
 }
 
 //go:generate mockery --name=userService --exported --output=./mocks --outpkg=mocks --filename=user_service.go --with-expecter=true
@@ -29,7 +29,7 @@ type userRepo interface {
 
 //go:generate mockery --name=userConverter --exported --output=./mocks --outpkg=mocks --filename=user_converter.go --with-expecter=true
 type userConverter interface {
-	ToModel(*entities.User) *models.User
+	ToModel(user *entities.User) *models.User
 }
 
 type service struct {

@@ -17,8 +17,8 @@ import (
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type todoService interface {
 	CreateTodoRecord(ctx context.Context, todo *handler_models.CreateTodo, creator *models.User) (*models.Todo, error)
-	GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) ([]*models.Todo, error)
-	GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) ([]*models.Todo, error)
+	GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) (*models.TodoPage, error)
+	GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) (*models.TodoPage, error)
 	GetTodoByListId(ctx context.Context, listId string, todoId string) (*models.Todo, error)
 	GetTodoRecord(ctx context.Context, todoId string) (*models.Todo, error)
 	GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*models.User, error)

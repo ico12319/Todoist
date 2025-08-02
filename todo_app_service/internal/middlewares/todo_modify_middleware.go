@@ -18,7 +18,7 @@ type tService interface {
 
 type lService interface {
 	GetListOwnerRecord(context.Context, string) (*models.User, error)
-	GetCollaborators(context.Context, string, *filters.BaseFilters) ([]*models.User, error)
+	GetCollaborators(context.Context, string, *filters.BaseFilters) (*models.UserPage, error)
 }
 
 type todoModifyMiddleware struct {
@@ -61,8 +61,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	collaborators, err := t.lService.GetCollaborators(ctx, todo.ListId, &filters.BaseFilters{})
-
+	collaboratorsPage, err := t.lService.GetCollaborators(ctx, todo.ListId, &filters.BaseFilters{})
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s collaborators", err.Error(), todo.ListId)
 
@@ -78,7 +77,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !determineWhetherUserHasAccess(assignee, listOwner, user, collaborators) {
+	if !determineWhetherUserHasAccess(assignee, listOwner, user, collaboratorsPage.Data) {
 		utils.EncodeError(
 			w,
 			"forbidden: only administrators, collaborators, list owners, or the assignee may access todo",

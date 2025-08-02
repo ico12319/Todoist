@@ -3,6 +3,7 @@ package http_helpers
 import (
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -15,20 +16,22 @@ type requestDecorator interface {
 	DecorateRequest(context.Context, *http.Request) (*http.Request, error)
 }
 
+type httpRequester interface {
+	NewRequestWithContext(ctx context.Context, method string, url string, body io.Reader) (*http.Request, error)
+}
+
 type service struct {
 	client    httpClient
 	decorator requestDecorator
+	requester httpRequester
 }
 
-func NewService(client httpClient, decorator requestDecorator) *service {
+func NewService(client httpClient, decorator requestDecorator, requester httpRequester) *service {
 	return &service{
 		client:    client,
 		decorator: decorator,
+		requester: requester,
 	}
-}
-
-func (*service) NewRequestWithContext(ctx context.Context, method string, url string, body io.Reader) (*http.Request, error) {
-	return http.NewRequestWithContext(ctx, method, url, body)
 }
 
 func (*service) SetCookie(w http.ResponseWriter, cookie *http.Cookie) {
@@ -42,7 +45,7 @@ func (*service) Redirect(w http.ResponseWriter, r *http.Request, url string, htt
 func (s *service) GetHttpResponse(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error) {
 	log.C(ctx).Info("getting http response in http response getter")
 
-	req, err := s.NewRequestWithContext(ctx, httpMethod, url, body)
+	req, err := s.requester.NewRequestWithContext(ctx, httpMethod, url, body)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s when trying to make http request", err.Error())
 		return nil, err
@@ -60,7 +63,7 @@ func (s *service) GetHttpResponse(ctx context.Context, httpMethod string, url st
 func (s *service) GetHttpResponseWithAuthHeader(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error) {
 	log.C(ctx).Info("getting http response in http response getter")
 
-	req, err := s.NewRequestWithContext(ctx, httpMethod, url, body)
+	req, err := s.requester.NewRequestWithContext(ctx, httpMethod, url, body)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s when trying to make http request", err.Error())
 		return nil, err
@@ -79,4 +82,22 @@ func (s *service) GetHttpResponseWithAuthHeader(ctx context.Context, httpMethod 
 	}
 
 	return resp, nil
+}
+
+func (s *service) GetHttpResponseWithAccessCode(ctx context.Context, httpMethod string, url string, body io.Reader, accessToken string) (*http.Response, error) {
+	req, err := s.requester.NewRequestWithContext(ctx, httpMethod, url, body)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get http response, error %s when making http request", err.Error())
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get http response, error %s when trying to make client do the request", err.Error())
+		return nil, err
+	}
+
+	return resp, err
 }

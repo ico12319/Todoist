@@ -10,36 +10,37 @@ import (
 	"net/http"
 )
 
+//go:generate mockery --name=httpService --exported --output=./mocks --outpkg=mocks --filename=http_service.go --with-expecter=true
 type httpService interface {
-	NewRequestWithContext(ctx context.Context, method string, url string, body io.Reader) (*http.Request, error)
-}
-
-type httpClient interface {
-	Do(*http.Request) (*http.Response, error)
+	GetHttpResponse(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 
 type service struct {
-	apiUrl    string
-	requester httpService
-	client    httpClient
+	apiUrl      string
+	httpService httpService
 }
 
-func NewService(apiUrl string, requester httpService, client httpClient) *service {
+func NewService(apiUrl string, httpService httpService) *service {
 	return &service{
-		apiUrl:    apiUrl,
-		requester: requester,
-		client:    client,
+		apiUrl:      apiUrl,
+		httpService: httpService,
 	}
 }
 
 func (s *service) Suggest(ctx context.Context) (*models.RandomActivity, error) {
 	log.C(ctx).Info("suggesting activity in random activity service")
 
-	resp, err := s.getBoredApiResponse(ctx)
+	resp, err := s.httpService.GetHttpResponse(ctx, http.MethodGet, s.apiUrl, nil)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
+		log.C(ctx).Errorf("failed to get http response when trying to suggest activity, error %s", err.Error())
 		return nil, err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.C(ctx).Warnf("bad http status code received when trying to call bored-api, expected %d actual %d", http.StatusOK, resp.StatusCode)
+		return nil, errors.New("error when trying to suggest an activity")
+	}
+
 	defer resp.Body.Close()
 
 	var randomActivity models.RandomActivity
@@ -49,22 +50,4 @@ func (s *service) Suggest(ctx context.Context) (*models.RandomActivity, error) {
 	}
 
 	return &randomActivity, nil
-}
-
-func (s *service) getBoredApiResponse(ctx context.Context) (*http.Response, error) {
-	log.C(ctx).Info("trying to get http response from bored api in random_activities_api")
-
-	req, err := s.requester.NewRequestWithContext(ctx, http.MethodGet, s.apiUrl, nil)
-	if err != nil {
-		log.C(ctx).Errorf("failed to make http request to bored api, error %s", err.Error())
-		return nil, errors.New("error when trying to make http request")
-	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get http response from bored api, error %s", err.Error())
-		return nil, errors.New("error when trying to get http response")
-	}
-
-	return resp, nil
 }

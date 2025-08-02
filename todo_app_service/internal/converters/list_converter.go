@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/pagination"
 	"github.com/gofrs/uuid"
 )
 
@@ -35,7 +36,7 @@ func (*listConverter) ToEntity(list *models.List) *entities.List {
 	}
 }
 
-func (l *listConverter) ManyToModel(lists []entities.List) []*models.List {
+func (l *listConverter) ManyToModel(lists []entities.List) *models.ListPage {
 	modelsLists := make([]*models.List, 0, len(lists))
 
 	for _, entity := range lists {
@@ -43,7 +44,16 @@ func (l *listConverter) ManyToModel(lists []entities.List) []*models.List {
 		modelsLists = append(modelsLists, model)
 	}
 
-	return modelsLists
+	return &models.ListPage{
+		Data:       modelsLists,
+		TotalCount: lists[0].TotalCount,
+		PageInfo: &pagination.Page{
+			StartCursor: modelsLists[0].Id,
+			EndCursor:   modelsLists[len(modelsLists)-1].Id,
+			HasNextPage: lists[0].TotalCount > len(lists),
+			HasPrevPage: false,
+		},
+	}
 }
 
 func (*listConverter) FromCreateHandlerModelToModel(list *handler_models.CreateList) *models.List {

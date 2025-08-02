@@ -30,18 +30,18 @@ type jwtGetter interface {
 }
 
 type jwtCreationService struct {
-	uService userService
-	timeGen  timeGenerator
-	getter   jwtGetter
-	jwtKey   []byte
+	uService  userService
+	timeGen   timeGenerator
+	getter    jwtGetter
+	jwtSecret []byte
 }
 
-func NewJwtService(uService userService, timeGen timeGenerator, getter jwtGetter, jwtKey []byte) *jwtCreationService {
+func NewJwtService(uService userService, timeGen timeGenerator, getter jwtGetter, jwtSecret []byte) *jwtCreationService {
 	return &jwtCreationService{
-		uService: uService,
-		timeGen:  timeGen,
-		getter:   getter,
-		jwtKey:   jwtKey,
+		uService:  uService,
+		timeGen:   timeGen,
+		getter:    getter,
+		jwtSecret: jwtSecret,
 	}
 }
 
@@ -89,7 +89,7 @@ func (j *jwtCreationService) GenerateJWT(ctx context.Context, email string, role
 
 	jwtToken := j.getter.GetJWTWithClaims(jwt.SigningMethodHS256, claims)
 
-	stringToken, err := j.getter.GetSignedJWT(jwtToken, j.jwtKey)
+	stringToken, err := j.getter.GetSignedJWT(jwtToken, j.jwtSecret)
 	if err != nil {
 		log.C(ctx).Errorf("failed to sign jwt, error %s", err.Error())
 		return "", err
@@ -112,7 +112,7 @@ func (j *jwtCreationService) GenerateRefreshToken(ctx context.Context) (string, 
 
 	refreshJwtToken := j.getter.GetJWTWithClaims(jwt.SigningMethodHS256, claims)
 
-	signedToken, err := j.getter.GetSignedJWT(refreshJwtToken, j.jwtKey)
+	signedToken, err := j.getter.GetSignedJWT(refreshJwtToken, j.jwtSecret)
 	if err != nil {
 		log.C(ctx).Errorf("failed to sign jwt, error %s", err.Error())
 		return "", utils.DetermineErrorWhenSigningJWT(err)

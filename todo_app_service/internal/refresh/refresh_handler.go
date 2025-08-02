@@ -13,7 +13,7 @@ import (
 
 //go:generate mockery --name=jwtIssuer --exported --output=./mocks --outpkg=mocks --filename=jwt_issuer.go --with-expecter=true
 type jwtIssuer interface {
-	GetRenewedTokens(context.Context, *handler_models.Refresh) (*models.CallbackResponse, error)
+	GetRenewedTokens(ctx context.Context, refresh *handler_models.Refresh) (*models.CallbackResponse, error)
 }
 
 type handler struct {

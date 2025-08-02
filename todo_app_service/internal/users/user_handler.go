@@ -13,20 +13,16 @@ import (
 )
 
 type userService interface {
-	GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) ([]*models.User, error)
+	GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) (*models.UserPage, error)
 	GetUserRecord(ctx context.Context, userId string) (*models.User, error)
 	DeleteUserRecord(ctx context.Context, id string) error
 	DeleteUsers(ctx context.Context) error
-	GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) ([]*models.List, error)
-	GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) ([]*models.Todo, error)
-}
-
-type fieldsValidator interface {
-	Struct(st interface{}) error
+	GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) (*models.ListPage, error)
+	GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) (*models.TodoPage, error)
 }
 
 type handler struct {
-	service    userService
+	service userService
 }
 
 func NewHandler(service userService) *handler {

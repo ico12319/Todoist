@@ -9,7 +9,7 @@ import (
 
 //go:generate mockery --name=SqlQueryRetriever --output=./mocks --outpkg=mocks --filename=sql_retriever.go --with-expecter=true
 type SqlQueryRetriever interface {
-	DetermineCorrectSqlQuery(context.Context) string
+	DetermineCorrectSqlQuery(ctx context.Context) string
 }
 
 // concrete component!

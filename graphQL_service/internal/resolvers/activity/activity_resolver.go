@@ -21,6 +21,7 @@ type activityConverter interface {
 type httpService interface {
 	GetHttpResponse(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
+
 type resolver struct {
 	restUrl        string
 	responseGetter httpService
@@ -28,7 +29,11 @@ type resolver struct {
 }
 
 func NewResolver(restUrl string, responseGetter httpService, converter activityConverter) *resolver {
-	return &resolver{restUrl: restUrl, responseGetter: responseGetter, converter: converter}
+	return &resolver{
+		restUrl:        restUrl,
+		responseGetter: responseGetter,
+		converter:      converter,
+	}
 }
 
 func (r *resolver) RandomActivity(ctx context.Context) (*gql.RandomActivity, error) {

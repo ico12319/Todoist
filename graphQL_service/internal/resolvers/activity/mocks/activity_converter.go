@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	model "Todo-List/internProject/graphQL_service/graph/model"
+	"Todo-List/internProject/graphQL_service/graph/model"
 	models "Todo-List/internProject/todo_app_service/pkg/models"
 
 	mock "github.com/stretchr/testify/mock"

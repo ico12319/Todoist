@@ -2,6 +2,7 @@ package models
 
 import (
 	"Todo-List/internProject/todo_app_service/pkg/constants"
+	"Todo-List/internProject/todo_app_service/pkg/pagination"
 	"time"
 )
 
@@ -16,4 +17,10 @@ type Todo struct {
 	Priority    constants.Priority   `json:"priority"`
 	AssignedTo  *string              `json:"assigned_to,omitempty"`
 	DueDate     *time.Time           `json:"due_date,omitempty"`
+}
+
+type TodoPage struct {
+	Data       []*Todo          `json:"data"`
+	PageInfo   *pagination.Page `json:"page_info"`
+	TotalCount int              `json:"total_count"`
 }

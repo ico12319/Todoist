@@ -16,16 +16,16 @@ import (
 
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type listService interface {
-	GetListRecord(context.Context, string) (*models.List, error)
-	GetListsRecords(context.Context, *filters.BaseFilters) ([]*models.List, error)
-	GetCollaborators(context.Context, string, *filters.BaseFilters) ([]*models.User, error)
-	GetListOwnerRecord(context.Context, string) (*models.User, error)
-	DeleteListRecord(context.Context, string) error
-	DeleteLists(context.Context) error
-	CreateListRecord(context.Context, *handler_models.CreateList, string) (*models.List, error)
-	UpdateListPartiallyRecord(context.Context, string, *handler_models.UpdateList) (*models.List, error)
-	AddCollaborator(context.Context, string, string) (*models.User, error)
-	DeleteCollaborator(context.Context, string, string) error
+	GetListRecord(ctx context.Context, listId string) (*models.List, error)
+	GetListsRecords(ctx context.Context, filters *filters.BaseFilters) (*models.ListPage, error)
+	GetCollaborators(ctx context.Context, listId string, filters *filters.BaseFilters) (*models.UserPage, error)
+	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
+	DeleteListRecord(ctx context.Context, listId string) error
+	DeleteLists(ctx context.Context) error
+	CreateListRecord(ctx context.Context, list *handler_models.CreateList, ownerId string) (*models.List, error)
+	UpdateListPartiallyRecord(ctx context.Context, listId string, list *handler_models.UpdateList) (*models.List, error)
+	AddCollaborator(ctx context.Context, listId string, userEmail string) (*models.User, error)
+	DeleteCollaborator(ctx context.Context, listId string, userId string) error
 }
 
 type fieldValidator interface {
@@ -233,7 +233,7 @@ func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	modelUser, err := h.serv.AddCollaborator(ctx, listId, user.Id)
+	modelUser, err := h.serv.AddCollaborator(ctx, listId, user.Email)
 	if err != nil {
 		log.C(ctx).Error("failed to add collaborator in list handler, error when calling service function")
 

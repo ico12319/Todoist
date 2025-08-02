@@ -14,12 +14,3 @@ func NewNotFoundError(target string, id string) *NotFoundError {
 func (n NotFoundError) Error() string {
 	return fmt.Sprintf("%s with id %s not found", n.target, n.id)
 }
-
-func (n NotFoundError) Is(target error) bool {
-	t, ok := target.(NotFoundError)
-	if !ok {
-		return false
-	}
-
-	return n.target == t.target && n.id == t.id
-}

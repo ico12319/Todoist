@@ -17,4 +17,5 @@ type Todo struct {
 	AssignedTo  uuid.NullUUID `db:"assigned_to"`
 	DueDate     sql.NullTime  `db:"due_date"`
 	Priority    string        `db:"priority"`
+	TotalCount  int           `db:"total_count"`
 }

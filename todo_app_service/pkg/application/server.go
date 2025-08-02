@@ -71,7 +71,7 @@ type userHandler interface {
 
 type listService interface {
 	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) ([]*models.User, error)
+	GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) (*models.UserPage, error)
 	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
 }
 
@@ -87,6 +87,7 @@ type todoService interface {
 type oauthHandler interface {
 	HandleLogin(w http.ResponseWriter, r *http.Request)
 	HandleCallback(w http.ResponseWriter, r *http.Request)
+	HandleLogout(w http.ResponseWriter, r *http.Request)
 }
 
 type jwtParser interface {
@@ -145,13 +146,14 @@ func NewServer() *server {
 
 	decoratorFactory := sql_query_decorators.GetDecoratorFactoryInstance()
 
-	httpService := http_helpers.NewService(client, nil)
+	httpRequester := http_helpers.NewHttpRequester()
+	httpService := http_helpers.NewService(client, nil, httpRequester)
 
 	uService := users.NewService(uRepo, userConverter, listConverter, todoConverter, uuidGen, decoratorFactory, sqlDB)
 	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uRepo, tRepo, userConverter, decoratorFactory, sqlDB)
 	tService := todos.NewService(tRepo, lRepo, uuidGen, timeGen, todoConverter, userConverter, decoratorFactory, sqlDB)
 	refreshService := refresh.NewService(refreshRepo, uRepo, refreshConverter, userConverter, sqlDB)
-	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpService, client)
+	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpService)
 
 	fValidator := validators.GetInstance()
 	tHandler := todos.NewHandler(tService, fValidator)
@@ -159,7 +161,7 @@ func NewServer() *server {
 	uHandler := users.NewHandler(uService)
 	activityHandler := random_activites.NewHandler(activityService)
 
-	gitHubService := gitHub.NewService(httpService, client)
+	gitHubService := gitHub.NewService(httpService)
 
 	jwtManager := jwt.NewJwtManager()
 
@@ -171,7 +173,7 @@ func NewServer() *server {
 	jwtIssuer := jwt.NewJwtIssuer(jwtCreator, userInfoAggregator, refreshService, uService)
 
 	oauthService := oauth.NewService(stateGenerator, configManagerInstance.OauthConfig)
-	oHandler := oauth.NewHandler(oauthService, jwtIssuer, httpService)
+	oHandler := oauth.NewHandler(oauthService, jwtIssuer, httpService, configManagerInstance.CorsConfig.FrontendUrl)
 
 	tokenParser := jwt.NewJwtParseService(jwtManager)
 
@@ -248,6 +250,8 @@ func (s *server) registerOauthPaths(router *mux.Router) {
 	// then you should put the JWT in the Auth header in Postman and you will be able to call the API,
 	// keep you refresh token because you JWT token will expire after around 3 minutes.
 	router.HandleFunc("/auth2/callback", s.oauthHandler.HandleCallback).Methods(http.MethodGet)
+
+	router.HandleFunc("/logout", s.oauthHandler.HandleLogout).Methods(http.MethodGet)
 }
 
 func (s *server) registerRefreshPaths(router *mux.Router) {
@@ -303,7 +307,10 @@ func (s *server) registerAdminPaths(router *mux.Router) {
 
 func (s *server) Start() {
 	oauthRouter := mux.NewRouter()
-	oauthRouter.Use(middlewares.ContentTypeMiddlewareFunc)
+	oauthRouter.Use(middlewares.ContentTypeMiddlewareFunc,
+		middlewares.CorsMiddlewareFunc(s.configManger.CorsConfig.FrontendUrl),
+		middlewares.LogEnrichMiddlewareFunc(s.generator))
+
 	s.registerOauthPaths(oauthRouter)
 
 	healthRouter := oauthRouter.PathPrefix("").Subrouter()
@@ -313,8 +320,7 @@ func (s *server) Start() {
 	s.registerRefreshPaths(refreshRouter)
 
 	router := oauthRouter.PathPrefix("").Subrouter()
-	router.Use(middlewares.ContentTypeMiddlewareFunc, middlewares.LogEnrichMiddlewareFunc(s.generator),
-		middlewares.AuthorisationMiddlewareFunc(s.userServ, s.tokenParser))
+	router.Use(middlewares.AuthorisationMiddlewareFunc(s.userServ, s.tokenParser))
 
 	randomActivityRouter := router.PathPrefix("/activities").Subrouter()
 	s.registerRandomActivityPaths(randomActivityRouter)

@@ -12,4 +12,5 @@ type List struct {
 	LastUpdated time.Time `db:"last_updated"`
 	Owner       uuid.UUID `db:"owner"`
 	Description string    `db:"description"`
+	TotalCount  int       `db:"total_count"`
 }

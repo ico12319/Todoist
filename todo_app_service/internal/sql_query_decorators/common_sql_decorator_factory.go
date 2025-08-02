@@ -12,9 +12,10 @@ type Filters interface {
 }
 
 type SqlDecoratorCreator interface {
-	Create(context.Context, SqlQueryRetriever, Filters) (SqlQueryRetriever, error)
+	Create(ctx context.Context, inner SqlQueryRetriever, filters Filters) (SqlQueryRetriever, error)
 	Priority() int
 }
+
 type decoratorFactory struct {
 	creators []SqlDecoratorCreator
 }

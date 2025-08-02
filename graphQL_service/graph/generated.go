@@ -44,7 +44,6 @@ type ResolverRoot interface {
 	Mutation() MutationResolver
 	Query() QueryResolver
 	Todo() TodoResolver
-	User() UserResolver
 }
 
 type DirectiveRoot struct {
@@ -64,9 +63,9 @@ type ComplexityRoot struct {
 	}
 
 	DeleteCollaboratorPayload struct {
-		ListID  func(childComplexity int) int
-		Success func(childComplexity int) int
-		UserID  func(childComplexity int) int
+		ListID    func(childComplexity int) int
+		Success   func(childComplexity int) int
+		UserEmail func(childComplexity int) int
 	}
 
 	DeleteListPayload struct {
@@ -81,7 +80,7 @@ type ComplexityRoot struct {
 	DeleteTodoPayload struct {
 		CreatedAt   func(childComplexity int) int
 		Description func(childComplexity int) int
-		DueData     func(childComplexity int) int
+		DueDate     func(childComplexity int) int
 		ID          func(childComplexity int) int
 		LastUpdated func(childComplexity int) int
 		Name        func(childComplexity int) int
@@ -133,6 +132,8 @@ type ComplexityRoot struct {
 
 	PageInfo struct {
 		EndCursor   func(childComplexity int) int
+		HasNextPage func(childComplexity int) int
+		HasPrevPage func(childComplexity int) int
 		StartCursor func(childComplexity int) int
 	}
 
@@ -219,12 +220,6 @@ type QueryResolver interface {
 }
 type TodoResolver interface {
 	List(ctx context.Context, obj *model.Todo) (*model.List, error)
-
-	AssignedTo(ctx context.Context, obj *model.Todo) (*model.User, error)
-}
-type UserResolver interface {
-	AssignedTo(ctx context.Context, obj *model.User, filter *model.TodosFilterInput, limit *int32, after *string) (*model.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *model.User, filter *model.UserRoleFilter, limit *int32, after *string) (*model.ListPage, error)
 }
 
 type executableSchema struct {
@@ -246,14 +241,14 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "Access.jwt_token":
+	case "Access.jwtToken":
 		if e.complexity.Access.JwtToken == nil {
 			break
 		}
 
 		return e.complexity.Access.JwtToken(childComplexity), true
 
-	case "Access.refresh_token":
+	case "Access.refreshToken":
 		if e.complexity.Access.RefreshToken == nil {
 			break
 		}
@@ -281,7 +276,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.CreateCollaboratorPayload.User(childComplexity), true
 
-	case "DeleteCollaboratorPayload.list_id":
+	case "DeleteCollaboratorPayload.listId":
 		if e.complexity.DeleteCollaboratorPayload.ListID == nil {
 			break
 		}
@@ -295,12 +290,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteCollaboratorPayload.Success(childComplexity), true
 
-	case "DeleteCollaboratorPayload.user_id":
-		if e.complexity.DeleteCollaboratorPayload.UserID == nil {
+	case "DeleteCollaboratorPayload.userEmail":
+		if e.complexity.DeleteCollaboratorPayload.UserEmail == nil {
 			break
 		}
 
-		return e.complexity.DeleteCollaboratorPayload.UserID(childComplexity), true
+		return e.complexity.DeleteCollaboratorPayload.UserEmail(childComplexity), true
 
 	case "DeleteListPayload.created_at":
 		if e.complexity.DeleteListPayload.CreatedAt == nil {
@@ -344,7 +339,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteListPayload.Success(childComplexity), true
 
-	case "DeleteTodoPayload.created_at":
+	case "DeleteTodoPayload.createdAt":
 		if e.complexity.DeleteTodoPayload.CreatedAt == nil {
 			break
 		}
@@ -358,12 +353,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteTodoPayload.Description(childComplexity), true
 
-	case "DeleteTodoPayload.due_data":
-		if e.complexity.DeleteTodoPayload.DueData == nil {
+	case "DeleteTodoPayload.dueDate":
+		if e.complexity.DeleteTodoPayload.DueDate == nil {
 			break
 		}
 
-		return e.complexity.DeleteTodoPayload.DueData(childComplexity), true
+		return e.complexity.DeleteTodoPayload.DueDate(childComplexity), true
 
 	case "DeleteTodoPayload.id":
 		if e.complexity.DeleteTodoPayload.ID == nil {
@@ -372,7 +367,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteTodoPayload.ID(childComplexity), true
 
-	case "DeleteTodoPayload.last_updated":
+	case "DeleteTodoPayload.lastUpdated":
 		if e.complexity.DeleteTodoPayload.LastUpdated == nil {
 			break
 		}
@@ -508,14 +503,14 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.ListPage.Data(childComplexity), true
 
-	case "ListPage.page_info":
+	case "ListPage.pageInfo":
 		if e.complexity.ListPage.PageInfo == nil {
 			break
 		}
 
 		return e.complexity.ListPage.PageInfo(childComplexity), true
 
-	case "ListPage.total_count":
+	case "ListPage.totalCount":
 		if e.complexity.ListPage.TotalCount == nil {
 			break
 		}
@@ -682,6 +677,20 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.PageInfo.EndCursor(childComplexity), true
 
+	case "PageInfo.hasNextPage":
+		if e.complexity.PageInfo.HasNextPage == nil {
+			break
+		}
+
+		return e.complexity.PageInfo.HasNextPage(childComplexity), true
+
+	case "PageInfo.hasPrevPage":
+		if e.complexity.PageInfo.HasPrevPage == nil {
+			break
+		}
+
+		return e.complexity.PageInfo.HasPrevPage(childComplexity), true
+
 	case "PageInfo.startCursor":
 		if e.complexity.PageInfo.StartCursor == nil {
 			break
@@ -796,14 +805,14 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.RandomActivity.Type(childComplexity), true
 
-	case "Todo.assigned_to":
+	case "Todo.assignedTo":
 		if e.complexity.Todo.AssignedTo == nil {
 			break
 		}
 
 		return e.complexity.Todo.AssignedTo(childComplexity), true
 
-	case "Todo.created_at":
+	case "Todo.createdAt":
 		if e.complexity.Todo.CreatedAt == nil {
 			break
 		}
@@ -817,7 +826,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Todo.Description(childComplexity), true
 
-	case "Todo.due_data":
+	case "Todo.dueData":
 		if e.complexity.Todo.DueData == nil {
 			break
 		}
@@ -831,7 +840,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Todo.ID(childComplexity), true
 
-	case "Todo.last_updated":
+	case "Todo.lastUpdated":
 		if e.complexity.Todo.LastUpdated == nil {
 			break
 		}
@@ -873,26 +882,26 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.TodoPage.Data(childComplexity), true
 
-	case "TodoPage.page_info":
+	case "TodoPage.pageInfo":
 		if e.complexity.TodoPage.PageInfo == nil {
 			break
 		}
 
 		return e.complexity.TodoPage.PageInfo(childComplexity), true
 
-	case "TodoPage.total_count":
+	case "TodoPage.totalCount":
 		if e.complexity.TodoPage.TotalCount == nil {
 			break
 		}
 
 		return e.complexity.TodoPage.TotalCount(childComplexity), true
 
-	case "User.assigned_to":
+	case "User.assignedTo":
 		if e.complexity.User.AssignedTo == nil {
 			break
 		}
 
-		args, err := ec.field_User_assigned_to_args(ctx, rawArgs)
+		args, err := ec.field_User_assignedTo_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -913,12 +922,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.User.ID(childComplexity), true
 
-	case "User.participate_in":
+	case "User.participateIn":
 		if e.complexity.User.ParticipateIn == nil {
 			break
 		}
 
-		args, err := ec.field_User_participate_in_args(ctx, rawArgs)
+		args, err := ec.field_User_participateIn_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -939,14 +948,14 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.UserPage.Data(childComplexity), true
 
-	case "UserPage.page_info":
+	case "UserPage.pageInfo":
 		if e.complexity.UserPage.PageInfo == nil {
 			break
 		}
 
 		return e.complexity.UserPage.PageInfo(childComplexity), true
 
-	case "UserPage.total_count":
+	case "UserPage.totalCount":
 		if e.complexity.UserPage.TotalCount == nil {
 			break
 		}
@@ -1725,27 +1734,27 @@ func (ec *executionContext) field_Query_users_argsAfter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_assigned_to_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_User_assignedTo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_User_assigned_to_argsFilter(ctx, rawArgs)
+	arg0, err := ec.field_User_assignedTo_argsFilter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["filter"] = arg0
-	arg1, err := ec.field_User_assigned_to_argsLimit(ctx, rawArgs)
+	arg1, err := ec.field_User_assignedTo_argsLimit(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["limit"] = arg1
-	arg2, err := ec.field_User_assigned_to_argsAfter(ctx, rawArgs)
+	arg2, err := ec.field_User_assignedTo_argsAfter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["after"] = arg2
 	return args, nil
 }
-func (ec *executionContext) field_User_assigned_to_argsFilter(
+func (ec *executionContext) field_User_assignedTo_argsFilter(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*model.TodosFilterInput, error) {
@@ -1758,7 +1767,7 @@ func (ec *executionContext) field_User_assigned_to_argsFilter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_assigned_to_argsLimit(
+func (ec *executionContext) field_User_assignedTo_argsLimit(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*int32, error) {
@@ -1771,7 +1780,7 @@ func (ec *executionContext) field_User_assigned_to_argsLimit(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_assigned_to_argsAfter(
+func (ec *executionContext) field_User_assignedTo_argsAfter(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*string, error) {
@@ -1784,27 +1793,27 @@ func (ec *executionContext) field_User_assigned_to_argsAfter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participate_in_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_User_participateIn_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_User_participate_in_argsFilter(ctx, rawArgs)
+	arg0, err := ec.field_User_participateIn_argsFilter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["filter"] = arg0
-	arg1, err := ec.field_User_participate_in_argsLimit(ctx, rawArgs)
+	arg1, err := ec.field_User_participateIn_argsLimit(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["limit"] = arg1
-	arg2, err := ec.field_User_participate_in_argsAfter(ctx, rawArgs)
+	arg2, err := ec.field_User_participateIn_argsAfter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["after"] = arg2
 	return args, nil
 }
-func (ec *executionContext) field_User_participate_in_argsFilter(
+func (ec *executionContext) field_User_participateIn_argsFilter(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*model.UserRoleFilter, error) {
@@ -1817,7 +1826,7 @@ func (ec *executionContext) field_User_participate_in_argsFilter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participate_in_argsLimit(
+func (ec *executionContext) field_User_participateIn_argsLimit(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*int32, error) {
@@ -1830,7 +1839,7 @@ func (ec *executionContext) field_User_participate_in_argsLimit(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participate_in_argsAfter(
+func (ec *executionContext) field_User_participateIn_argsAfter(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*string, error) {
@@ -1943,8 +1952,8 @@ func (ec *executionContext) field___Type_fields_argsIncludeDeprecated(
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _Access_jwt_token(ctx context.Context, field graphql.CollectedField, obj *model.Access) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Access_jwt_token(ctx, field)
+func (ec *executionContext) _Access_jwtToken(ctx context.Context, field graphql.CollectedField, obj *model.Access) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Access_jwtToken(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1974,7 +1983,7 @@ func (ec *executionContext) _Access_jwt_token(ctx context.Context, field graphql
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Access_jwt_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Access_jwtToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Access",
 		Field:      field,
@@ -1987,8 +1996,8 @@ func (ec *executionContext) fieldContext_Access_jwt_token(_ context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _Access_refresh_token(ctx context.Context, field graphql.CollectedField, obj *model.Access) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Access_refresh_token(ctx, field)
+func (ec *executionContext) _Access_refreshToken(ctx context.Context, field graphql.CollectedField, obj *model.Access) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Access_refreshToken(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2018,7 +2027,7 @@ func (ec *executionContext) _Access_refresh_token(ctx context.Context, field gra
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Access_refresh_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Access_refreshToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Access",
 		Field:      field,
@@ -2132,10 +2141,10 @@ func (ec *executionContext) fieldContext_CreateCollaboratorPayload_user(_ contex
 				return ec.fieldContext_User_email(ctx, field)
 			case "role":
 				return ec.fieldContext_User_role(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_User_assigned_to(ctx, field)
-			case "participate_in":
-				return ec.fieldContext_User_participate_in(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_User_assignedTo(ctx, field)
+			case "participateIn":
+				return ec.fieldContext_User_participateIn(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -2187,8 +2196,8 @@ func (ec *executionContext) fieldContext_CreateCollaboratorPayload_success(_ con
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteCollaboratorPayload_list_id(ctx context.Context, field graphql.CollectedField, obj *model.DeleteCollaboratorPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteCollaboratorPayload_list_id(ctx, field)
+func (ec *executionContext) _DeleteCollaboratorPayload_listId(ctx context.Context, field graphql.CollectedField, obj *model.DeleteCollaboratorPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteCollaboratorPayload_listId(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2218,7 +2227,7 @@ func (ec *executionContext) _DeleteCollaboratorPayload_list_id(ctx context.Conte
 	return ec.marshalNID2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteCollaboratorPayload_list_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteCollaboratorPayload_listId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteCollaboratorPayload",
 		Field:      field,
@@ -2231,8 +2240,8 @@ func (ec *executionContext) fieldContext_DeleteCollaboratorPayload_list_id(_ con
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteCollaboratorPayload_user_id(ctx context.Context, field graphql.CollectedField, obj *model.DeleteCollaboratorPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteCollaboratorPayload_user_id(ctx, field)
+func (ec *executionContext) _DeleteCollaboratorPayload_userEmail(ctx context.Context, field graphql.CollectedField, obj *model.DeleteCollaboratorPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteCollaboratorPayload_userEmail(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2245,7 +2254,7 @@ func (ec *executionContext) _DeleteCollaboratorPayload_user_id(ctx context.Conte
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.UserID, nil
+		return obj.UserEmail, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2259,17 +2268,17 @@ func (ec *executionContext) _DeleteCollaboratorPayload_user_id(ctx context.Conte
 	}
 	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteCollaboratorPayload_user_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteCollaboratorPayload_userEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteCollaboratorPayload",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2782,8 +2791,8 @@ func (ec *executionContext) fieldContext_DeleteTodoPayload_status(_ context.Cont
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteTodoPayload_created_at(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteTodoPayload_created_at(ctx, field)
+func (ec *executionContext) _DeleteTodoPayload_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteTodoPayload_createdAt(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2810,7 +2819,7 @@ func (ec *executionContext) _DeleteTodoPayload_created_at(ctx context.Context, f
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteTodoPayload_created_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteTodoPayload_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteTodoPayload",
 		Field:      field,
@@ -2823,8 +2832,8 @@ func (ec *executionContext) fieldContext_DeleteTodoPayload_created_at(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteTodoPayload_last_updated(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteTodoPayload_last_updated(ctx, field)
+func (ec *executionContext) _DeleteTodoPayload_lastUpdated(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteTodoPayload_lastUpdated(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2851,7 +2860,7 @@ func (ec *executionContext) _DeleteTodoPayload_last_updated(ctx context.Context,
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteTodoPayload_last_updated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteTodoPayload_lastUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteTodoPayload",
 		Field:      field,
@@ -2905,8 +2914,8 @@ func (ec *executionContext) fieldContext_DeleteTodoPayload_priority(_ context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteTodoPayload_due_data(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteTodoPayload_due_data(ctx, field)
+func (ec *executionContext) _DeleteTodoPayload_dueDate(ctx context.Context, field graphql.CollectedField, obj *model.DeleteTodoPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteTodoPayload_dueDate(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2919,7 +2928,7 @@ func (ec *executionContext) _DeleteTodoPayload_due_data(ctx context.Context, fie
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.DueData, nil
+		return obj.DueDate, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2933,7 +2942,7 @@ func (ec *executionContext) _DeleteTodoPayload_due_data(ctx context.Context, fie
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteTodoPayload_due_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteTodoPayload_dueDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteTodoPayload",
 		Field:      field,
@@ -3381,10 +3390,10 @@ func (ec *executionContext) fieldContext_List_owner(_ context.Context, field gra
 				return ec.fieldContext_User_email(ctx, field)
 			case "role":
 				return ec.fieldContext_User_role(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_User_assigned_to(ctx, field)
-			case "participate_in":
-				return ec.fieldContext_User_participate_in(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_User_assignedTo(ctx, field)
+			case "participateIn":
+				return ec.fieldContext_User_participateIn(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -3433,10 +3442,10 @@ func (ec *executionContext) fieldContext_List_todos(ctx context.Context, field g
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_TodoPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_TodoPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_TodoPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_TodoPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_TodoPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type TodoPage", field.Name)
 		},
@@ -3496,10 +3505,10 @@ func (ec *executionContext) fieldContext_List_collaborators(ctx context.Context,
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_UserPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_UserPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_UserPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_UserPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_UserPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
@@ -3580,8 +3589,8 @@ func (ec *executionContext) fieldContext_ListPage_data(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _ListPage_page_info(ctx context.Context, field graphql.CollectedField, obj *model.ListPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ListPage_page_info(ctx, field)
+func (ec *executionContext) _ListPage_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.ListPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ListPage_pageInfo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -3608,7 +3617,7 @@ func (ec *executionContext) _ListPage_page_info(ctx context.Context, field graph
 	return ec.marshalOPageInfo2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐPageInfo(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ListPage_page_info(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ListPage_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ListPage",
 		Field:      field,
@@ -3620,6 +3629,10 @@ func (ec *executionContext) fieldContext_ListPage_page_info(_ context.Context, f
 				return ec.fieldContext_PageInfo_startCursor(ctx, field)
 			case "endCursor":
 				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPrevPage":
+				return ec.fieldContext_PageInfo_hasPrevPage(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
 		},
@@ -3627,8 +3640,8 @@ func (ec *executionContext) fieldContext_ListPage_page_info(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _ListPage_total_count(ctx context.Context, field graphql.CollectedField, obj *model.ListPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ListPage_total_count(ctx, field)
+func (ec *executionContext) _ListPage_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.ListPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ListPage_totalCount(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -3658,7 +3671,7 @@ func (ec *executionContext) _ListPage_total_count(ctx context.Context, field gra
 	return ec.marshalNInt2int32(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ListPage_total_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ListPage_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ListPage",
 		Field:      field,
@@ -3919,10 +3932,10 @@ func (ec *executionContext) fieldContext_Mutation_deleteListCollaborator(ctx con
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "list_id":
-				return ec.fieldContext_DeleteCollaboratorPayload_list_id(ctx, field)
-			case "user_id":
-				return ec.fieldContext_DeleteCollaboratorPayload_user_id(ctx, field)
+			case "listId":
+				return ec.fieldContext_DeleteCollaboratorPayload_listId(ctx, field)
+			case "userEmail":
+				return ec.fieldContext_DeleteCollaboratorPayload_userEmail(ctx, field)
 			case "success":
 				return ec.fieldContext_DeleteCollaboratorPayload_success(ctx, field)
 			}
@@ -4119,16 +4132,16 @@ func (ec *executionContext) fieldContext_Mutation_createTodo(ctx context.Context
 				return ec.fieldContext_Todo_list(ctx, field)
 			case "status":
 				return ec.fieldContext_Todo_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_Todo_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_Todo_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Todo_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_Todo_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_Todo_priority(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_Todo_assigned_to(ctx, field)
-			case "due_data":
-				return ec.fieldContext_Todo_due_data(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_Todo_assignedTo(ctx, field)
+			case "dueData":
+				return ec.fieldContext_Todo_dueData(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -4196,14 +4209,14 @@ func (ec *executionContext) fieldContext_Mutation_deleteTodo(ctx context.Context
 				return ec.fieldContext_DeleteTodoPayload_description(ctx, field)
 			case "status":
 				return ec.fieldContext_DeleteTodoPayload_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_DeleteTodoPayload_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_DeleteTodoPayload_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_DeleteTodoPayload_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_DeleteTodoPayload_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_DeleteTodoPayload_priority(ctx, field)
-			case "due_data":
-				return ec.fieldContext_DeleteTodoPayload_due_data(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_DeleteTodoPayload_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeleteTodoPayload", field.Name)
 		},
@@ -4271,14 +4284,14 @@ func (ec *executionContext) fieldContext_Mutation_deleteTodos(_ context.Context,
 				return ec.fieldContext_DeleteTodoPayload_description(ctx, field)
 			case "status":
 				return ec.fieldContext_DeleteTodoPayload_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_DeleteTodoPayload_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_DeleteTodoPayload_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_DeleteTodoPayload_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_DeleteTodoPayload_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_DeleteTodoPayload_priority(ctx, field)
-			case "due_data":
-				return ec.fieldContext_DeleteTodoPayload_due_data(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_DeleteTodoPayload_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeleteTodoPayload", field.Name)
 		},
@@ -4335,16 +4348,16 @@ func (ec *executionContext) fieldContext_Mutation_updateTodo(ctx context.Context
 				return ec.fieldContext_Todo_list(ctx, field)
 			case "status":
 				return ec.fieldContext_Todo_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_Todo_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_Todo_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Todo_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_Todo_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_Todo_priority(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_Todo_assigned_to(ctx, field)
-			case "due_data":
-				return ec.fieldContext_Todo_due_data(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_Todo_assignedTo(ctx, field)
+			case "dueData":
+				return ec.fieldContext_Todo_dueData(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -4412,14 +4425,14 @@ func (ec *executionContext) fieldContext_Mutation_deleteTodosByListId(ctx contex
 				return ec.fieldContext_DeleteTodoPayload_description(ctx, field)
 			case "status":
 				return ec.fieldContext_DeleteTodoPayload_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_DeleteTodoPayload_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_DeleteTodoPayload_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_DeleteTodoPayload_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_DeleteTodoPayload_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_DeleteTodoPayload_priority(ctx, field)
-			case "due_data":
-				return ec.fieldContext_DeleteTodoPayload_due_data(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_DeleteTodoPayload_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeleteTodoPayload", field.Name)
 		},
@@ -4596,10 +4609,10 @@ func (ec *executionContext) fieldContext_Mutation_exchangeRefreshToken(ctx conte
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "jwt_token":
-				return ec.fieldContext_Access_jwt_token(ctx, field)
-			case "refresh_token":
-				return ec.fieldContext_Access_refresh_token(ctx, field)
+			case "jwtToken":
+				return ec.fieldContext_Access_jwtToken(ctx, field)
+			case "refreshToken":
+				return ec.fieldContext_Access_refreshToken(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Access", field.Name)
 		},
@@ -4706,6 +4719,94 @@ func (ec *executionContext) fieldContext_PageInfo_endCursor(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _PageInfo_hasNextPage(ctx context.Context, field graphql.CollectedField, obj *model.PageInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HasNextPage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PageInfo_hasNextPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PageInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PageInfo_hasPrevPage(ctx context.Context, field graphql.CollectedField, obj *model.PageInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PageInfo_hasPrevPage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HasPrevPage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PageInfo_hasPrevPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PageInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_lists(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_lists(ctx, field)
 	if err != nil {
@@ -4747,10 +4848,10 @@ func (ec *executionContext) fieldContext_Query_lists(ctx context.Context, field 
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_ListPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_ListPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_ListPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_ListPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_ListPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ListPage", field.Name)
 		},
@@ -4880,10 +4981,10 @@ func (ec *executionContext) fieldContext_Query_todos(ctx context.Context, field 
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_TodoPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_TodoPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_TodoPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_TodoPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_TodoPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type TodoPage", field.Name)
 		},
@@ -4948,16 +5049,16 @@ func (ec *executionContext) fieldContext_Query_todo(ctx context.Context, field g
 				return ec.fieldContext_Todo_list(ctx, field)
 			case "status":
 				return ec.fieldContext_Todo_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_Todo_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_Todo_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Todo_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_Todo_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_Todo_priority(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_Todo_assigned_to(ctx, field)
-			case "due_data":
-				return ec.fieldContext_Todo_due_data(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_Todo_assignedTo(ctx, field)
+			case "dueData":
+				return ec.fieldContext_Todo_dueData(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -5017,10 +5118,10 @@ func (ec *executionContext) fieldContext_Query_users(ctx context.Context, field 
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_UserPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_UserPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_UserPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_UserPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_UserPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserPage", field.Name)
 		},
@@ -5081,10 +5182,10 @@ func (ec *executionContext) fieldContext_Query_user(ctx context.Context, field g
 				return ec.fieldContext_User_email(ctx, field)
 			case "role":
 				return ec.fieldContext_User_role(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_User_assigned_to(ctx, field)
-			case "participate_in":
-				return ec.fieldContext_User_participate_in(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_User_assignedTo(ctx, field)
+			case "participateIn":
+				return ec.fieldContext_User_participateIn(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -5702,8 +5803,8 @@ func (ec *executionContext) fieldContext_Todo_status(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Todo_created_at(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Todo_created_at(ctx, field)
+func (ec *executionContext) _Todo_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Todo_createdAt(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -5733,7 +5834,7 @@ func (ec *executionContext) _Todo_created_at(ctx context.Context, field graphql.
 	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Todo_created_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Todo_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Todo",
 		Field:      field,
@@ -5746,8 +5847,8 @@ func (ec *executionContext) fieldContext_Todo_created_at(_ context.Context, fiel
 	return fc, nil
 }
 
-func (ec *executionContext) _Todo_last_updated(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Todo_last_updated(ctx, field)
+func (ec *executionContext) _Todo_lastUpdated(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Todo_lastUpdated(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -5777,7 +5878,7 @@ func (ec *executionContext) _Todo_last_updated(ctx context.Context, field graphq
 	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Todo_last_updated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Todo_lastUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Todo",
 		Field:      field,
@@ -5834,8 +5935,8 @@ func (ec *executionContext) fieldContext_Todo_priority(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _Todo_assigned_to(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Todo_assigned_to(ctx, field)
+func (ec *executionContext) _Todo_assignedTo(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Todo_assignedTo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -5848,7 +5949,7 @@ func (ec *executionContext) _Todo_assigned_to(ctx context.Context, field graphql
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Todo().AssignedTo(rctx, obj)
+		return obj.AssignedTo, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5862,12 +5963,12 @@ func (ec *executionContext) _Todo_assigned_to(ctx context.Context, field graphql
 	return ec.marshalOUser2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Todo_assigned_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Todo_assignedTo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Todo",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -5876,10 +5977,10 @@ func (ec *executionContext) fieldContext_Todo_assigned_to(_ context.Context, fie
 				return ec.fieldContext_User_email(ctx, field)
 			case "role":
 				return ec.fieldContext_User_role(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_User_assigned_to(ctx, field)
-			case "participate_in":
-				return ec.fieldContext_User_participate_in(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_User_assignedTo(ctx, field)
+			case "participateIn":
+				return ec.fieldContext_User_participateIn(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -5887,8 +5988,8 @@ func (ec *executionContext) fieldContext_Todo_assigned_to(_ context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _Todo_due_data(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Todo_due_data(ctx, field)
+func (ec *executionContext) _Todo_dueData(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Todo_dueData(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -5915,7 +6016,7 @@ func (ec *executionContext) _Todo_due_data(ctx context.Context, field graphql.Co
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Todo_due_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Todo_dueData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Todo",
 		Field:      field,
@@ -5977,16 +6078,16 @@ func (ec *executionContext) fieldContext_TodoPage_data(_ context.Context, field 
 				return ec.fieldContext_Todo_list(ctx, field)
 			case "status":
 				return ec.fieldContext_Todo_status(ctx, field)
-			case "created_at":
-				return ec.fieldContext_Todo_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_Todo_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Todo_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_Todo_lastUpdated(ctx, field)
 			case "priority":
 				return ec.fieldContext_Todo_priority(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_Todo_assigned_to(ctx, field)
-			case "due_data":
-				return ec.fieldContext_Todo_due_data(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_Todo_assignedTo(ctx, field)
+			case "dueData":
+				return ec.fieldContext_Todo_dueData(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -5994,8 +6095,8 @@ func (ec *executionContext) fieldContext_TodoPage_data(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _TodoPage_page_info(ctx context.Context, field graphql.CollectedField, obj *model.TodoPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_TodoPage_page_info(ctx, field)
+func (ec *executionContext) _TodoPage_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.TodoPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TodoPage_pageInfo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6022,7 +6123,7 @@ func (ec *executionContext) _TodoPage_page_info(ctx context.Context, field graph
 	return ec.marshalOPageInfo2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐPageInfo(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_TodoPage_page_info(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_TodoPage_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "TodoPage",
 		Field:      field,
@@ -6034,6 +6135,10 @@ func (ec *executionContext) fieldContext_TodoPage_page_info(_ context.Context, f
 				return ec.fieldContext_PageInfo_startCursor(ctx, field)
 			case "endCursor":
 				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPrevPage":
+				return ec.fieldContext_PageInfo_hasPrevPage(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
 		},
@@ -6041,8 +6146,8 @@ func (ec *executionContext) fieldContext_TodoPage_page_info(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _TodoPage_total_count(ctx context.Context, field graphql.CollectedField, obj *model.TodoPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_TodoPage_total_count(ctx, field)
+func (ec *executionContext) _TodoPage_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.TodoPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TodoPage_totalCount(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6072,7 +6177,7 @@ func (ec *executionContext) _TodoPage_total_count(ctx context.Context, field gra
 	return ec.marshalNInt2int32(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_TodoPage_total_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_TodoPage_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "TodoPage",
 		Field:      field,
@@ -6236,8 +6341,8 @@ func (ec *executionContext) fieldContext_User_role(_ context.Context, field grap
 	return fc, nil
 }
 
-func (ec *executionContext) _User_assigned_to(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_User_assigned_to(ctx, field)
+func (ec *executionContext) _User_assignedTo(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_User_assignedTo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6250,7 +6355,7 @@ func (ec *executionContext) _User_assigned_to(ctx context.Context, field graphql
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().AssignedTo(rctx, obj, fc.Args["filter"].(*model.TodosFilterInput), fc.Args["limit"].(*int32), fc.Args["after"].(*string))
+		return obj.AssignedTo, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6267,20 +6372,20 @@ func (ec *executionContext) _User_assigned_to(ctx context.Context, field graphql
 	return ec.marshalNTodoPage2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐTodoPage(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_User_assigned_to(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_User_assignedTo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "User",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_TodoPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_TodoPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_TodoPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_TodoPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_TodoPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type TodoPage", field.Name)
 		},
@@ -6292,15 +6397,15 @@ func (ec *executionContext) fieldContext_User_assigned_to(ctx context.Context, f
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_User_assigned_to_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_User_assignedTo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _User_participate_in(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_User_participate_in(ctx, field)
+func (ec *executionContext) _User_participateIn(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_User_participateIn(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6313,7 +6418,7 @@ func (ec *executionContext) _User_participate_in(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().ParticipateIn(rctx, obj, fc.Args["filter"].(*model.UserRoleFilter), fc.Args["limit"].(*int32), fc.Args["after"].(*string))
+		return obj.ParticipateIn, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6330,20 +6435,20 @@ func (ec *executionContext) _User_participate_in(ctx context.Context, field grap
 	return ec.marshalNListPage2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐListPage(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_User_participate_in(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_User_participateIn(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "User",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "data":
 				return ec.fieldContext_ListPage_data(ctx, field)
-			case "page_info":
-				return ec.fieldContext_ListPage_page_info(ctx, field)
-			case "total_count":
-				return ec.fieldContext_ListPage_total_count(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_ListPage_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_ListPage_totalCount(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ListPage", field.Name)
 		},
@@ -6355,7 +6460,7 @@ func (ec *executionContext) fieldContext_User_participate_in(ctx context.Context
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_User_participate_in_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_User_participateIn_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -6407,10 +6512,10 @@ func (ec *executionContext) fieldContext_UserPage_data(_ context.Context, field 
 				return ec.fieldContext_User_email(ctx, field)
 			case "role":
 				return ec.fieldContext_User_role(ctx, field)
-			case "assigned_to":
-				return ec.fieldContext_User_assigned_to(ctx, field)
-			case "participate_in":
-				return ec.fieldContext_User_participate_in(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_User_assignedTo(ctx, field)
+			case "participateIn":
+				return ec.fieldContext_User_participateIn(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -6418,8 +6523,8 @@ func (ec *executionContext) fieldContext_UserPage_data(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _UserPage_page_info(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_UserPage_page_info(ctx, field)
+func (ec *executionContext) _UserPage_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserPage_pageInfo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6446,7 +6551,7 @@ func (ec *executionContext) _UserPage_page_info(ctx context.Context, field graph
 	return ec.marshalOPageInfo2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐPageInfo(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_UserPage_page_info(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_UserPage_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "UserPage",
 		Field:      field,
@@ -6458,6 +6563,10 @@ func (ec *executionContext) fieldContext_UserPage_page_info(_ context.Context, f
 				return ec.fieldContext_PageInfo_startCursor(ctx, field)
 			case "endCursor":
 				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPrevPage":
+				return ec.fieldContext_PageInfo_hasPrevPage(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
 		},
@@ -6465,8 +6574,8 @@ func (ec *executionContext) fieldContext_UserPage_page_info(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _UserPage_total_count(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_UserPage_total_count(ctx, field)
+func (ec *executionContext) _UserPage_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.UserPage) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserPage_totalCount(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6496,7 +6605,7 @@ func (ec *executionContext) _UserPage_total_count(ctx context.Context, field gra
 	return ec.marshalNInt2int32(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_UserPage_total_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_UserPage_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "UserPage",
 		Field:      field,
@@ -8467,27 +8576,27 @@ func (ec *executionContext) unmarshalInputCollaboratorInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"list_id", "user_id"}
+	fieldsInOrder := [...]string{"listId", "userEmail"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "list_id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("list_id"))
+		case "listId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("listId"))
 			data, err := ec.unmarshalNID2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.ListID = data
-		case "user_id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("user_id"))
-			data, err := ec.unmarshalNID2string(ctx, v)
+		case "userEmail":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userEmail"))
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.UserID = data
+			it.UserEmail = data
 		}
 	}
 
@@ -8535,7 +8644,7 @@ func (ec *executionContext) unmarshalInputCreateTodoInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "list_id", "priority", "assigned_to", "due_date"}
+	fieldsInOrder := [...]string{"name", "description", "listId", "priority", "assignedTo", "dueDate"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -8556,8 +8665,8 @@ func (ec *executionContext) unmarshalInputCreateTodoInput(ctx context.Context, o
 				return it, err
 			}
 			it.Description = data
-		case "list_id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("list_id"))
+		case "listId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("listId"))
 			data, err := ec.unmarshalNID2string(ctx, v)
 			if err != nil {
 				return it, err
@@ -8570,15 +8679,15 @@ func (ec *executionContext) unmarshalInputCreateTodoInput(ctx context.Context, o
 				return it, err
 			}
 			it.Priority = data
-		case "assigned_to":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assigned_to"))
+		case "assignedTo":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedTo"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.AssignedTo = data
-		case "due_date":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("due_date"))
+		case "dueDate":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueDate"))
 			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
 			if err != nil {
 				return it, err
@@ -8597,15 +8706,15 @@ func (ec *executionContext) unmarshalInputRefreshTokenInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"refresh_token"}
+	fieldsInOrder := [...]string{"refreshToken"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "refresh_token":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("refresh_token"))
+		case "refreshToken":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("refreshToken"))
 			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
@@ -8699,7 +8808,7 @@ func (ec *executionContext) unmarshalInputUpdateTodoInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "status", "priority", "assigned_to", "due_date"}
+	fieldsInOrder := [...]string{"name", "description", "status", "priority", "assignedTo", "dueDate"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -8734,15 +8843,15 @@ func (ec *executionContext) unmarshalInputUpdateTodoInput(ctx context.Context, o
 				return it, err
 			}
 			it.Priority = data
-		case "assigned_to":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assigned_to"))
+		case "assignedTo":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedTo"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.AssignedTo = data
-		case "due_date":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("due_date"))
+		case "dueDate":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueDate"))
 			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
 			if err != nil {
 				return it, err
@@ -8830,13 +8939,13 @@ func (ec *executionContext) _Access(ctx context.Context, sel ast.SelectionSet, o
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Access")
-		case "jwt_token":
-			out.Values[i] = ec._Access_jwt_token(ctx, field, obj)
+		case "jwtToken":
+			out.Values[i] = ec._Access_jwtToken(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "refresh_token":
-			out.Values[i] = ec._Access_refresh_token(ctx, field, obj)
+		case "refreshToken":
+			out.Values[i] = ec._Access_refreshToken(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -8917,13 +9026,13 @@ func (ec *executionContext) _DeleteCollaboratorPayload(ctx context.Context, sel 
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("DeleteCollaboratorPayload")
-		case "list_id":
-			out.Values[i] = ec._DeleteCollaboratorPayload_list_id(ctx, field, obj)
+		case "listId":
+			out.Values[i] = ec._DeleteCollaboratorPayload_listId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "user_id":
-			out.Values[i] = ec._DeleteCollaboratorPayload_user_id(ctx, field, obj)
+		case "userEmail":
+			out.Values[i] = ec._DeleteCollaboratorPayload_userEmail(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9034,14 +9143,14 @@ func (ec *executionContext) _DeleteTodoPayload(ctx context.Context, sel ast.Sele
 			out.Values[i] = ec._DeleteTodoPayload_description(ctx, field, obj)
 		case "status":
 			out.Values[i] = ec._DeleteTodoPayload_status(ctx, field, obj)
-		case "created_at":
-			out.Values[i] = ec._DeleteTodoPayload_created_at(ctx, field, obj)
-		case "last_updated":
-			out.Values[i] = ec._DeleteTodoPayload_last_updated(ctx, field, obj)
+		case "createdAt":
+			out.Values[i] = ec._DeleteTodoPayload_createdAt(ctx, field, obj)
+		case "lastUpdated":
+			out.Values[i] = ec._DeleteTodoPayload_lastUpdated(ctx, field, obj)
 		case "priority":
 			out.Values[i] = ec._DeleteTodoPayload_priority(ctx, field, obj)
-		case "due_data":
-			out.Values[i] = ec._DeleteTodoPayload_due_data(ctx, field, obj)
+		case "dueDate":
+			out.Values[i] = ec._DeleteTodoPayload_dueDate(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -9296,10 +9405,10 @@ func (ec *executionContext) _ListPage(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "page_info":
-			out.Values[i] = ec._ListPage_page_info(ctx, field, obj)
-		case "total_count":
-			out.Values[i] = ec._ListPage_total_count(ctx, field, obj)
+		case "pageInfo":
+			out.Values[i] = ec._ListPage_pageInfo(ctx, field, obj)
+		case "totalCount":
+			out.Values[i] = ec._ListPage_totalCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9484,6 +9593,16 @@ func (ec *executionContext) _PageInfo(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "endCursor":
 			out.Values[i] = ec._PageInfo_endCursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasNextPage":
+			out.Values[i] = ec._PageInfo_hasNextPage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasPrevPage":
+			out.Values[i] = ec._PageInfo_hasPrevPage(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9826,13 +9945,13 @@ func (ec *executionContext) _Todo(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "created_at":
-			out.Values[i] = ec._Todo_created_at(ctx, field, obj)
+		case "createdAt":
+			out.Values[i] = ec._Todo_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "last_updated":
-			out.Values[i] = ec._Todo_last_updated(ctx, field, obj)
+		case "lastUpdated":
+			out.Values[i] = ec._Todo_lastUpdated(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
@@ -9841,41 +9960,10 @@ func (ec *executionContext) _Todo(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "assigned_to":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Todo_assigned_to(ctx, field, obj)
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-		case "due_data":
-			out.Values[i] = ec._Todo_due_data(ctx, field, obj)
+		case "assignedTo":
+			out.Values[i] = ec._Todo_assignedTo(ctx, field, obj)
+		case "dueData":
+			out.Values[i] = ec._Todo_dueData(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -9915,10 +10003,10 @@ func (ec *executionContext) _TodoPage(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "page_info":
-			out.Values[i] = ec._TodoPage_page_info(ctx, field, obj)
-		case "total_count":
-			out.Values[i] = ec._TodoPage_total_count(ctx, field, obj)
+		case "pageInfo":
+			out.Values[i] = ec._TodoPage_pageInfo(ctx, field, obj)
+		case "totalCount":
+			out.Values[i] = ec._TodoPage_totalCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9959,87 +10047,25 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 		case "id":
 			out.Values[i] = ec._User_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+				out.Invalids++
 			}
 		case "email":
 			out.Values[i] = ec._User_email(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+				out.Invalids++
 			}
 		case "role":
 			out.Values[i] = ec._User_role(ctx, field, obj)
-		case "assigned_to":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._User_assigned_to(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
+		case "assignedTo":
+			out.Values[i] = ec._User_assignedTo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
+		case "participateIn":
+			out.Values[i] = ec._User_participateIn(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-		case "participate_in":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._User_participate_in(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10079,10 +10105,10 @@ func (ec *executionContext) _UserPage(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "page_info":
-			out.Values[i] = ec._UserPage_page_info(ctx, field, obj)
-		case "total_count":
-			out.Values[i] = ec._UserPage_total_count(ctx, field, obj)
+		case "pageInfo":
+			out.Values[i] = ec._UserPage_pageInfo(ctx, field, obj)
+		case "totalCount":
+			out.Values[i] = ec._UserPage_totalCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

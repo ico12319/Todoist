@@ -22,14 +22,29 @@ func (*listConverter) ToGQL(list *models.List) *gql.List {
 	}
 }
 
-func (l *listConverter) ManyToGQL(lists []*models.List) []*gql.List {
+func (l *listConverter) ToListPageGQL(listPage *models.ListPage) *gql.ListPage {
+	if listPage == nil {
+		return nil
+	}
+
+	lists := listPage.Data
 	gqlLists := make([]*gql.List, len(lists))
 
 	for index, list := range lists {
 		gqlList := l.ToGQL(list)
 		gqlLists[index] = gqlList
 	}
-	return gqlLists
+
+	return &gql.ListPage{
+		Data: gqlLists,
+		PageInfo: &gql.PageInfo{
+			HasPrevPage: listPage.PageInfo.HasPrevPage,
+			HasNextPage: listPage.PageInfo.HasNextPage,
+			StartCursor: listPage.PageInfo.StartCursor,
+			EndCursor:   listPage.PageInfo.EndCursor,
+		},
+		TotalCount: int32(listPage.TotalCount),
+	}
 }
 
 func (*listConverter) ToModel(list *gql.List) *models.List {

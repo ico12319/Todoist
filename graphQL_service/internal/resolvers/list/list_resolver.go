@@ -19,60 +19,60 @@ import (
 
 //go:generate mockery --name=jsonMarshaller --exported --output=./mocks --outpkg=mocks --filename=json_marshaller.go --with-expecter=true
 type jsonMarshaller interface {
-	Marshal(interface{}) ([]byte, error)
+	Marshal(obj interface{}) ([]byte, error)
 }
 
-type httpResponseGetter interface {
-	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
+type httpService interface {
+	GetHttpResponseWithAuthHeader(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
-	CreateUrlDecorator(context.Context, string, url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
+	CreateUrlDecorator(ctx context.Context, serverAddress string, uFilters url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
 }
 
 //go:generate mockery --name=listConverter --output=./mocks --outpkg=mocks --filename=list_converter.go --with-expecter=true
 type listConverter interface {
-	ToGQL(*models.List) *gql.List
-	ManyToGQL([]*models.List) []*gql.List
-	ToModel(*gql.List) *models.List
-	CreateListInputGQLToHandlerModel(gql.CreateListInput) *handler_models.CreateList
-	UpdateListInputGQLToHandlerModel(gql.UpdateListInput) *handler_models.UpdateList
-	FromGQLModelToDeleteListPayload(*gql.List, bool) *gql.DeleteListPayload
-	ManyFromGQLModelToDeleteListPayload([]*gql.List, bool) []*gql.DeleteListPayload
+	ToGQL(list *models.List) *gql.List
+	ToListPageGQL(listPage *models.ListPage) *gql.ListPage
+	ToModel(list *gql.List) *models.List
+	CreateListInputGQLToHandlerModel(list gql.CreateListInput) *handler_models.CreateList
+	UpdateListInputGQLToHandlerModel(list gql.UpdateListInput) *handler_models.UpdateList
+	FromGQLModelToDeleteListPayload(list *gql.List, success bool) *gql.DeleteListPayload
+	ManyFromGQLModelToDeleteListPayload(lists []*gql.List, success bool) []*gql.DeleteListPayload
 }
 
 //go:generate mockery --name=userConverter --output=./mocks --outpkg=mocks --filename=user_converter.go --with-expecter=true
 type userConverter interface {
-	ToGQL(*models.User) *gql.User
-	ManyToGQL([]*models.User) []*gql.User
-	FromCollaboratorInputToAddCollaboratorHandlerModel(*gql.CollaboratorInput) *handler_models.AddCollaborator
+	ToGQL(user *models.User) *gql.User
+	ToUserPageGQL(userPage *models.UserPage) *gql.UserPage
+	FromCollaboratorInputToAddCollaboratorHandlerModel(user *gql.CollaboratorInput) *handler_models.AddCollaborator
 }
 
 //go:generate mockery --name=todoConverter --output=./mocks --outpkg=mocks --filename=todo_converter.go --with-expecter=true
 type todoConverter interface {
-	ToGQL(*models.Todo) *gql.Todo
-	ManyToGQL([]*models.Todo) []*gql.Todo
+	ToGQL(todo *models.Todo) *gql.Todo
+	ToTodoPageGQL(todoPage *models.TodoPage) *gql.TodoPage
 }
 
 type resolver struct {
-	lConverter     listConverter
-	uConverter     userConverter
-	tConverter     todoConverter
-	restUrl        string
-	factory        urlDecoratorFactory
-	responseGetter httpResponseGetter
-	marshaller     jsonMarshaller
+	lConverter  listConverter
+	uConverter  userConverter
+	tConverter  todoConverter
+	restUrl     string
+	factory     urlDecoratorFactory
+	httpService httpService
+	marshaller  jsonMarshaller
 }
 
-func NewResolver(lConverter listConverter, uConverter userConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, responseGetter httpResponseGetter, marshaller jsonMarshaller) *resolver {
+func NewResolver(lConverter listConverter, uConverter userConverter, tConverter todoConverter, restUrl string, factory urlDecoratorFactory, httpService httpService, marshaller jsonMarshaller) *resolver {
 	return &resolver{
-		lConverter:     lConverter,
-		uConverter:     uConverter,
-		tConverter:     tConverter,
-		restUrl:        restUrl,
-		factory:        factory,
-		responseGetter: responseGetter,
-		marshaller:     marshaller,
+		lConverter:  lConverter,
+		uConverter:  uConverter,
+		tConverter:  tConverter,
+		restUrl:     restUrl,
+		factory:     factory,
+		httpService: httpService,
+		marshaller:  marshaller,
 	}
 }
 
@@ -87,7 +87,7 @@ func (r *resolver) Lists(ctx context.Context, filter *url_filters.BaseFilters) (
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -99,23 +99,13 @@ func (r *resolver) Lists(ctx context.Context, filter *url_filters.BaseFilters) (
 		return nil, err
 	}
 
-	var lists []*models.List
-	if err = json.NewDecoder(resp.Body).Decode(&lists); err != nil {
+	var listPage models.ListPage
+	if err = json.NewDecoder(resp.Body).Decode(&listPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlModels := r.lConverter.ManyToGQL(lists)
-
-	pageInfo := utils.InitPageInfo[*gql.List](gqlModels, func(list *gql.List) string {
-		return list.ID
-	})
-
-	return &gql.ListPage{
-		Data:       gqlModels,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlModels)),
-	}, nil
+	return r.lConverter.ToListPageGQL(&listPage), nil
 }
 
 func (r *resolver) List(ctx context.Context, id string) (*gql.List, error) {
@@ -124,7 +114,7 @@ func (r *resolver) List(ctx context.Context, id string) (*gql.List, error) {
 	formatedId := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedId
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -156,7 +146,7 @@ func (r *resolver) ListOwner(ctx context.Context, obj *gql.List) (*gql.User, err
 	formatedSuffix := fmt.Sprintf("/%s/owner", obj.ID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formatedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -190,7 +180,7 @@ func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filter
 		return utils.InitEmptyTodoPage(), err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -202,23 +192,13 @@ func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filter
 		return nil, err
 	}
 
-	var todos []*models.Todo
-	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+	var todoPage models.TodoPage
+	if err = json.NewDecoder(resp.Body).Decode(&todoPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlTodos := r.tConverter.ManyToGQL(todos)
-
-	pageInfo := utils.InitPageInfo[*gql.Todo](gqlTodos, func(todo *gql.Todo) string {
-		return todo.ID
-	})
-
-	return &gql.TodoPage{
-		Data:       gqlTodos,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlTodos)),
-	}, nil
+	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
 func (r *resolver) DeleteList(ctx context.Context, id string) (*gql.DeleteListPayload, error) {
@@ -240,7 +220,7 @@ func (r *resolver) DeleteList(ctx context.Context, id string) (*gql.DeleteListPa
 	formattedUrl := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedUrl
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -264,7 +244,7 @@ func (r *resolver) UpdateList(ctx context.Context, id string, input gql.UpdateLi
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -291,7 +271,7 @@ func (r *resolver) UpdateList(ctx context.Context, id string, input gql.UpdateLi
 }
 
 func (r *resolver) AddListCollaborator(ctx context.Context, input gql.CollaboratorInput) (*gql.CreateCollaboratorPayload, error) {
-	log.C(ctx).Debugf("adding collaborator %s in list %s", input.UserID, input.ListID)
+	log.C(ctx).Debugf("adding collaborator %s in list %s", input.UserEmail, input.ListID)
 
 	formattedUrl := fmt.Sprintf("/%s%s", input.ListID, gql_constants.COLLABORATOR_PATH)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedUrl
@@ -306,7 +286,7 @@ func (r *resolver) AddListCollaborator(ctx context.Context, input gql.Collaborat
 		}, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -356,21 +336,21 @@ func (r *resolver) DeleteListCollaborator(ctx context.Context, id string, userID
 	formattedSuffix := fmt.Sprintf("/%s%s/%s", id, gql_constants.COLLABORATOR_PATH, userID)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete collaborator with id %s, error when trying to get http response", userID)
 		return &gql.DeleteCollaboratorPayload{
-			ListID:  id,
-			UserID:  userID,
-			Success: false,
+			ListID:    id,
+			UserEmail: userID,
+			Success:   false,
 		}, err
 	}
 	defer resp.Body.Close()
 
 	return &gql.DeleteCollaboratorPayload{
-		ListID:  id,
-		UserID:  userID,
-		Success: true,
+		ListID:    id,
+		UserEmail: userID,
+		Success:   true,
 	}, nil
 }
 
@@ -387,7 +367,7 @@ func (r *resolver) Collaborators(ctx context.Context, obj *gql.List, filters *ur
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -399,23 +379,13 @@ func (r *resolver) Collaborators(ctx context.Context, obj *gql.List, filters *ur
 		return nil, err
 	}
 
-	var collaborators []*models.User
-	if err = json.NewDecoder(resp.Body).Decode(&collaborators); err != nil {
+	var collaboratorsPage models.UserPage
+	if err = json.NewDecoder(resp.Body).Decode(&collaboratorsPage); err != nil {
 		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlUsers := r.uConverter.ManyToGQL(collaborators)
-
-	pageInfo := utils.InitPageInfo[*gql.User](gqlUsers, func(user *gql.User) string {
-		return user.ID
-	})
-
-	return &gql.UserPage{
-		Data:       gqlUsers,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlUsers)),
-	}, nil
+	return r.uConverter.ToUserPageGQL(&collaboratorsPage), nil
 }
 
 func (r *resolver) CreateList(ctx context.Context, input gql.CreateListInput) (*gql.List, error) {
@@ -431,7 +401,7 @@ func (r *resolver) CreateList(ctx context.Context, input gql.CreateListInput) (*
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -457,28 +427,28 @@ func (r *resolver) DeleteLists(ctx context.Context) ([]*gql.DeleteListPayload, e
 
 	url := r.restUrl + gql_constants.LISTS_PATH
 
-	gqlLists, err := r.getLists(ctx)
+	gqlListPage, err := r.getLists(ctx)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete lists, error %s when trying to get them", err.Error())
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.lConverter.ManyFromGQLModelToDeleteListPayload(gqlLists, true), nil
+	return r.lConverter.ManyFromGQLModelToDeleteListPayload(gqlListPage.Data, true), nil
 }
 
-func (r *resolver) getLists(ctx context.Context) ([]*gql.List, error) {
+func (r *resolver) getLists(ctx context.Context) (*gql.ListPage, error) {
 	log.C(ctx).Info("getting all lists without filters in list resolver")
 
 	url := r.restUrl + gql_constants.LISTS_PATH
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())
 		return nil, err
@@ -490,11 +460,11 @@ func (r *resolver) getLists(ctx context.Context) ([]*gql.List, error) {
 		return nil, err
 	}
 
-	var lists []*models.List
-	if err = json.NewDecoder(resp.Body).Decode(&lists); err != nil {
+	var listPage models.ListPage
+	if err = json.NewDecoder(resp.Body).Decode(&listPage); err != nil {
 		log.C(ctx).Errorf("failed to decode json body, error %s", err.Error())
 		return nil, err
 	}
 
-	return r.lConverter.ManyToGQL(lists), nil
+	return r.lConverter.ToListPageGQL(&listPage), nil
 }

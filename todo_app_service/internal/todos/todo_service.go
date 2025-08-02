@@ -49,7 +49,7 @@ type timeGenerator interface {
 type todoConverter interface {
 	ToModel(todo *entities.Todo) *models.Todo
 	ToEntity(todo *models.Todo) *entities.Todo
-	ManyToModel(todos []entities.Todo) []*models.Todo
+	ManyToModel(todos []entities.Todo) *models.TodoPage
 	ConvertFromCreateHandlerModelToModel(todo *handler_models.CreateTodo) *models.Todo
 	ConvertFromUpdateHandlerModelToModel(todo *handler_models.UpdateTodo) *models.Todo
 }
@@ -306,7 +306,7 @@ func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*
 	return assigneeModel, nil
 }
 
-func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) ([]*models.Todo, error) {
+func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) (*models.TodoPage, error) {
 	log.C(ctx).Info("getting todos in todo service")
 
 	// this is just the base part of the sql query,
@@ -325,7 +325,8 @@ func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilte
 	baseQuery := `WITH sorted_todos AS(
 		SELECT * FROM todos ORDER BY id
 	)
-	SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM sorted_todos`
+	SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority, COUNT(*) OVER() AS total_count
+FROM sorted_todos`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseQuery)
 	if err != nil {
@@ -349,7 +350,7 @@ func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilte
 	return todosModels, nil
 }
 
-func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) ([]*models.Todo, error) {
+func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) (*models.TodoPage, error) {
 	log.C(ctx).Infof("getting todos of list with id %s in list service", listId)
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -361,7 +362,7 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 
 	ctx = persistence.SaveToContext(ctx, tx)
 
-	if _, err := s.lRepo.GetList(ctx, listId); err != nil {
+	if _, err = s.lRepo.GetList(ctx, listId); err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when calling list repo", listId)
 		return nil, err
 	}
@@ -369,7 +370,8 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 	baseQuery := `WITH sorted_todos AS(
 					SELECT * FROM todos ORDER BY id
                  )
-				SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM sorted_todos WHERE list_id = $1`
+				SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority, COUNT(*) OVER() AS total_count
+FROM sorted_todos WHERE list_id = $1`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, filters, baseQuery)
 	if err != nil {

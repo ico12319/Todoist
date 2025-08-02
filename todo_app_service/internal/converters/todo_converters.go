@@ -6,6 +6,7 @@ import (
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/pagination"
 	"github.com/gofrs/uuid"
 )
 
@@ -84,7 +85,7 @@ func (*todoConverter) ConvertFromCreateHandlerModelToModel(todo *handler_models.
 	}
 }
 
-func (t *todoConverter) ManyToModel(todos []entities.Todo) []*models.Todo {
+func (t *todoConverter) ManyToModel(todos []entities.Todo) *models.TodoPage {
 	modelsTodos := make([]*models.Todo, len(todos))
 
 	for index, entity := range todos {
@@ -92,5 +93,14 @@ func (t *todoConverter) ManyToModel(todos []entities.Todo) []*models.Todo {
 		modelsTodos[index] = model
 	}
 
-	return modelsTodos
+	return &models.TodoPage{
+		Data:       modelsTodos,
+		TotalCount: todos[0].TotalCount,
+		PageInfo: &pagination.Page{
+			StartCursor: modelsTodos[0].Id,
+			EndCursor:   modelsTodos[len(todos)-1].Id,
+			HasNextPage: todos[0].TotalCount > len(todos),
+			HasPrevPage: false,
+		},
+	}
 }

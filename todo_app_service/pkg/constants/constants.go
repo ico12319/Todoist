@@ -86,3 +86,5 @@ const EXPIRED = "EXPIRED"
 const DATABASE_DOWN_STATUS = "database down"
 const READY_STATUS = "ready"
 const OK_STATUS = "ok"
+
+const HTTP_COOKIES_MAX_AGE = 15552000

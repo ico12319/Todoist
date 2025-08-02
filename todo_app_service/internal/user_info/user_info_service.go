@@ -5,13 +5,13 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"context"
-	"fmt"
+	"errors"
 )
 
 type githubService interface {
-	GetUserOrganizations(context.Context, string) ([]*gitHub.Organization, error)
-	GetUserInfo(context.Context, string) (*gitHub.UserInfo, error)
-	GetUserInfoPrivate(context.Context, string) (*gitHub.UserInfo, error)
+	GetUserOrganizations(ctx context.Context, accessToken string) ([]*gitHub.Organization, error)
+	GetUserInfo(ctx context.Context, accessToken string) (*gitHub.UserInfo, error)
+	GetUserInfoPrivate(ctx context.Context, accessToken string) (*gitHub.UserInfo, error)
 }
 
 type service struct {
@@ -39,7 +39,7 @@ func (u *service) DetermineUserGitHubEmail(ctx context.Context, accessToken stri
 	if userInfo == nil || userInfo.Email == nil {
 		log.C(ctx).Info("user does not have private emails associated with his account, unable to create user")
 
-		return "", fmt.Errorf("user should have at least one private or public email associated with his account")
+		return "", errors.New("user should have at least one private or public email associated with his account")
 	}
 
 	return *userInfo.Email, nil

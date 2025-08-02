@@ -3,9 +3,10 @@ package oauth
 import (
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
+	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/models"
 	"context"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -31,13 +32,15 @@ type handler struct {
 	service     oauthService
 	issuer      jwtIssuer
 	httpService httpService
+	frontendUrl string
 }
 
-func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService) *handler {
+func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService, frontendUrl string) *handler {
 	return &handler{
 		service:     service,
 		issuer:      issuer,
 		httpService: httpService,
+		frontendUrl: frontendUrl,
 	}
 }
 
@@ -65,7 +68,7 @@ func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	authCode := r.URL.Query().Get("code")
@@ -89,9 +92,40 @@ func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	if err = json.NewEncoder(w).Encode(tokens); err != nil {
-		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	h.httpService.SetCookie(w, &http.Cookie{
+		Name:   "access-token",
+		Value:  tokens.JwtToken,
+		Path:   "/",
+		MaxAge: constants.HTTP_COOKIES_MAX_AGE,
+	})
+
+	h.httpService.SetCookie(w, &http.Cookie{
+		Name:   "refresh-token",
+		Value:  tokens.RefreshToken,
+		Path:   "/",
+		MaxAge: constants.HTTP_COOKIES_MAX_AGE,
+	})
+
+	url := fmt.Sprintf("%s/index.html", h.frontendUrl)
+	h.httpService.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log.C(ctx).Info("handling logout in oauth handler")
+
+	h.httpService.SetCookie(w, &http.Cookie{
+		Name:  "access-token",
+		Value: "",
+		Path:  "/",
+	})
+
+	h.httpService.SetCookie(w, &http.Cookie{
+		Name:  "refresh-token",
+		Value: "",
+		Path:  "/",
+	})
+
+	url := fmt.Sprintf("%s/index.html#/login", h.frontendUrl)
+	h.httpService.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }

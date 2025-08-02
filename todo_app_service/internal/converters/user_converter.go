@@ -5,6 +5,7 @@ import (
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
 	"Todo-List/internProject/todo_app_service/pkg/models"
+	"Todo-List/internProject/todo_app_service/pkg/pagination"
 	"github.com/gofrs/uuid"
 )
 
@@ -55,13 +56,21 @@ func (*userConverter) ConvertFromCreateHandlerModelToModel(user *handler_models.
 	}
 }
 
-func (u *userConverter) ManyToModel(users []entities.User) []*models.User {
+func (u *userConverter) ManyToModel(users []entities.User) *models.UserPage {
 	modelUsers := make([]*models.User, 0, len(users))
-
 	for _, entity := range users {
 		model := u.ToModel(&entity)
 		modelUsers = append(modelUsers, model)
 	}
 
-	return modelUsers
+	return &models.UserPage{
+		Data:       modelUsers,
+		TotalCount: users[0].TotalCount,
+		PageInfo: &pagination.Page{
+			StartCursor: users[0].Id.String(),
+			EndCursor:   users[len(users)-1].Id.String(),
+			HasNextPage: users[0].TotalCount > len(users),
+			HasPrevPage: false,
+		},
+	}
 }

@@ -46,7 +46,7 @@ type timeGenerator interface {
 type listConverter interface {
 	ToModel(*entities.List) *models.List
 	ToEntity(*models.List) *entities.List
-	ManyToModel([]entities.List) []*models.List
+	ManyToModel([]entities.List) *models.ListPage
 	FromUpdateHandlerModelToModel(*handler_models.UpdateList) *models.List
 	FromCreateHandlerModelToModel(*handler_models.CreateList) *models.List
 }
@@ -55,12 +55,12 @@ type listConverter interface {
 type userConverter interface {
 	ToModel(*entities.User) *models.User
 	ToEntity(*models.User) *entities.User
-	ManyToModel([]entities.User) []*models.User
+	ManyToModel(users []entities.User) *models.UserPage
 }
 
 //go:generate mockery --name=userService --exported --output=./mocks --outpkg=mocks --filename=user_service.go --with-expecter=true
 type userRepo interface {
-	GetUser(context.Context, string) (*entities.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 }
 
 //go:generate mockery --name=sqlDecoratorFactory --exported --output=./mocks --outpkg=mocks --filename=sql_decorator_factory.go --with-expecter=true
@@ -95,7 +95,7 @@ func NewService(repo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
 	}
 }
 
-func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.BaseFilters) ([]*models.List, error) {
+func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.BaseFilters) (*models.ListPage, error) {
 	log.C(ctx).Info("getting lists from list service")
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -107,7 +107,10 @@ func (s *service) GetListsRecords(ctx context.Context, lFilters *filters.BaseFil
 
 	ctx = persistence.SaveToContext(ctx, tx)
 
-	baseQuery := `SELECT id,name,created_at,last_updated,owner,description FROM (SELECT * FROM lists ORDER BY id)`
+	baseQuery := `WITH sorted_lists AS(
+					SELECT * FROM lists ORDER BY id
+ 				)
+				SELECT id, name, created_at, last_updated, owner, description, COUNT(*) OVER() AS total_count FROM sorted_lists`
 
 	retriever, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseQuery)
 	if err != nil {
@@ -229,8 +232,8 @@ func (s *service) UpdateListPartiallyRecord(ctx context.Context, listId string, 
 	return readyModel, nil
 }
 
-func (s *service) AddCollaborator(ctx context.Context, listId string, userId string) (*models.User, error) {
-	log.C(ctx).Debugf("adding collaborator with id %s in list with id %s", userId, listId)
+func (s *service) AddCollaborator(ctx context.Context, listId string, userEmail string) (*models.User, error) {
+	log.C(ctx).Debugf("adding collaborator with email %s in list with id %s", userEmail, listId)
 
 	tx, err := s.transact.BeginContext(ctx)
 	if err != nil {
@@ -241,21 +244,21 @@ func (s *service) AddCollaborator(ctx context.Context, listId string, userId str
 
 	ctx = persistence.SaveToContext(ctx, tx)
 
-	user, err := s.uRepo.GetUser(ctx, userId)
+	user, err := s.uRepo.GetUserByEmail(ctx, userEmail)
 	if err != nil {
-		log.C(ctx).Errorf("failed to get user with id %s, error when calling user repo function", userId)
+		log.C(ctx).Errorf("failed to get user with email %s, error when calling user repo function", userEmail)
 		return nil, err
 	}
 
-	if err = s.lRepo.UpdateListSharedWith(ctx, listId, userId); err != nil {
-		log.C(ctx).Errorf("failed to add collaborator with id %s in list with id %s, error when calling repo function", userId, listId)
+	if err = s.lRepo.UpdateListSharedWith(ctx, listId, user.Id.String()); err != nil {
+		log.C(ctx).Errorf("failed to add collaborator with email %s in list with id %s, error when calling repo function", userEmail, listId)
 		return nil, err
 	}
 
 	modelUser := s.uConverter.ToModel(user)
 
 	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to add user with id %s as collaborator in list with id %s, error %s", userId, listId, err.Error())
+		log.C(ctx).Errorf("failed to commit transaction when trying to add user with email %s as collaborator in list with id %s, error %s", userEmail, listId, err.Error())
 		return nil, err
 	}
 
@@ -317,7 +320,7 @@ func (s *service) DeleteLists(ctx context.Context) error {
 	return nil
 }
 
-func (s *service) GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) ([]*models.User, error) {
+func (s *service) GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) (*models.UserPage, error) {
 	log.C(ctx).Info("getting list collaborators from list service")
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -338,7 +341,7 @@ func (s *service) GetCollaborators(ctx context.Context, listId string, lFilters 
 					SELECT users.id,users.email,users.role,list_id FROM users 
 					JOIN user_lists ON users.id = user_lists.user_id ORDER BY users.id
 				   ) 
-					SELECT id, email, role FROM sorted_user_cte WHERE list_id = $1`
+					SELECT id, email, role, COUNT(*) OVER() AS total_count FROM sorted_user_cte WHERE list_id = $1`
 
 	sqlQueryBuilder, err := s.factory.CreateSqlDecorator(ctx, lFilters, baseQuery)
 	if err != nil {
@@ -416,35 +419,4 @@ func (s *service) GetListOwnerRecord(ctx context.Context, listId string) (*model
 	}
 
 	return modelOwner, nil
-}
-
-func (s *service) CheckWhetherUserIsCollaborator(ctx context.Context, listId string, userId string) (bool, error) {
-	log.C(ctx).Infof("checking whether a user with id %s is collaborator in list with id %s", userId, listId)
-
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin ctx in list service when trying to delete collaorator, error %s", err.Error())
-		return false, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	if _, err = s.uRepo.GetUser(ctx, userId); err != nil {
-		log.C(ctx).Errorf("failed to check whether user with id %s is collaborator, error %s when trying to get it", userId, err.Error())
-		return false, err
-	}
-
-	isCollaborator, err := s.lRepo.CheckWhetherUserIsCollaborator(ctx, listId, userId)
-	if err != nil {
-		log.C(ctx).Errorf("failed to check whether user with id %s is collaorator in list with id %s, error %s", userId, listId, err.Error())
-		return false, nil
-	}
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to check whether user with id %s is collaborator in list with id %s , error %s", userId, listId, err.Error())
-		return false, err
-	}
-
-	return isCollaborator, nil
 }

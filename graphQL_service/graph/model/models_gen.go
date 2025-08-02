@@ -17,13 +17,13 @@ type Pageable interface {
 }
 
 type Access struct {
-	JwtToken     string `json:"jwt_token"`
-	RefreshToken string `json:"refresh_token"`
+	JwtToken     string `json:"jwtToken"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 type CollaboratorInput struct {
-	ListID string `json:"list_id"`
-	UserID string `json:"user_id"`
+	ListID    string `json:"listId"`
+	UserEmail string `json:"userEmail"`
 }
 
 type CreateCollaboratorPayload struct {
@@ -40,16 +40,16 @@ type CreateListInput struct {
 type CreateTodoInput struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
-	ListID     string   `json:"list_id"`
+	ListID     string   `json:"listId"`
 	Priority   Priority `json:"priority"`
-	AssignedTo *string  `json:"assigned_to,omitempty"`
-	DueDate     *time.Time `json:"due_date,omitempty"`
+	AssignedTo *string  `json:"assignedTo,omitempty"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
 }
 
 type DeleteCollaboratorPayload struct {
-	ListID  string `json:"list_id"`
-	UserID  string `json:"user_id"`
-	Success bool   `json:"success"`
+	ListID    string `json:"listId"`
+	UserEmail string `json:"userEmail"`
+	Success   bool   `json:"success"`
 }
 
 type DeleteListPayload struct {
@@ -67,10 +67,10 @@ type DeleteTodoPayload struct {
 	Name        *string     `json:"name,omitempty"`
 	Description *string     `json:"description,omitempty"`
 	Status      *TodoStatus `json:"status,omitempty"`
-	CreatedAt   *time.Time  `json:"created_at,omitempty"`
-	LastUpdated *time.Time  `json:"last_updated,omitempty"`
+	CreatedAt   *time.Time  `json:"createdAt,omitempty"`
+	LastUpdated *time.Time  `json:"lastUpdated,omitempty"`
 	Priority    *Priority   `json:"priority,omitempty"`
-	DueData     *time.Time  `json:"due_data,omitempty"`
+	DueDate     *time.Time  `json:"dueDate,omitempty"`
 }
 
 type DeleteUserPayload struct {
@@ -93,8 +93,8 @@ type List struct {
 
 type ListPage struct {
 	Data       []*List   `json:"data"`
-	PageInfo   *PageInfo `json:"page_info,omitempty"`
-	TotalCount int32     `json:"total_count"`
+	PageInfo   *PageInfo `json:"pageInfo,omitempty"`
+	TotalCount int32     `json:"totalCount"`
 }
 
 func (ListPage) IsPageable()                 {}
@@ -107,6 +107,8 @@ type Mutation struct {
 type PageInfo struct {
 	StartCursor string `json:"startCursor"`
 	EndCursor   string `json:"endCursor"`
+	HasNextPage bool   `json:"hasNextPage"`
+	HasPrevPage bool   `json:"hasPrevPage"`
 }
 
 type Query struct {
@@ -120,7 +122,7 @@ type RandomActivity struct {
 }
 
 type RefreshTokenInput struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 type Todo struct {
@@ -129,17 +131,17 @@ type Todo struct {
 	Description string     `json:"description"`
 	List        *List      `json:"list"`
 	Status      TodoStatus `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastUpdated time.Time  `json:"last_updated"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastUpdated time.Time  `json:"lastUpdated"`
 	Priority    Priority   `json:"priority"`
-	AssignedTo  *User      `json:"assigned_to,omitempty"`
-	DueData     *time.Time `json:"due_data,omitempty"`
+	AssignedTo  *User      `json:"assignedTo,omitempty"`
+	DueData     *time.Time `json:"dueData,omitempty"`
 }
 
 type TodoPage struct {
 	Data       []*Todo   `json:"data"`
-	PageInfo   *PageInfo `json:"page_info,omitempty"`
-	TotalCount int32     `json:"total_count"`
+	PageInfo   *PageInfo `json:"pageInfo,omitempty"`
+	TotalCount int32     `json:"totalCount"`
 }
 
 func (TodoPage) IsPageable()                 {}
@@ -162,22 +164,22 @@ type UpdateTodoInput struct {
 	Description *string     `json:"description,omitempty"`
 	Status      *TodoStatus `json:"status,omitempty"`
 	Priority    *Priority   `json:"priority,omitempty"`
-	AssignedTo  *string     `json:"assigned_to,omitempty"`
-	DueDate     *time.Time  `json:"due_date,omitempty"`
+	AssignedTo  *string     `json:"assignedTo,omitempty"`
+	DueDate     *time.Time  `json:"dueDate,omitempty"`
 }
 
 type User struct {
 	ID            string    `json:"id"`
 	Email         string    `json:"email"`
 	Role          *UserRole `json:"role,omitempty"`
-	AssignedTo    *TodoPage `json:"assigned_to"`
-	ParticipateIn *ListPage `json:"participate_in"`
+	AssignedTo    *TodoPage `json:"assignedTo"`
+	ParticipateIn *ListPage `json:"participateIn"`
 }
 
 type UserPage struct {
 	Data       []*User   `json:"data"`
-	PageInfo   *PageInfo `json:"page_info,omitempty"`
-	TotalCount int32     `json:"total_count"`
+	PageInfo   *PageInfo `json:"pageInfo,omitempty"`
+	TotalCount int32     `json:"totalCount"`
 }
 
 func (UserPage) IsPageable()                 {}

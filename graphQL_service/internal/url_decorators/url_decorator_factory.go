@@ -11,7 +11,7 @@ type UrlFilters interface {
 }
 
 type urlDecoratorsCreator interface {
-	Create(context.Context, QueryParamsRetrievers, UrlFilters) QueryParamsRetrievers
+	Create(ctx context.Context, inner QueryParamsRetrievers, uFilters UrlFilters) QueryParamsRetrievers
 }
 
 type urlDecoratorFactory struct {
@@ -49,7 +49,7 @@ func (u *urlDecoratorFactory) CreateUrlDecorator(ctx context.Context, initialUrl
 
 	log.C(ctx).Info("creating url decorator in url decorator factory")
 
-	baseDecorator := newBaseUrl(initialUrl)
+	baseDecorator := NewBaseUrl(initialUrl)
 
 	for _, creator := range u.creators {
 		baseDecorator = creator.Create(ctx, baseDecorator, filters)

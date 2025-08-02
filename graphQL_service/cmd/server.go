@@ -48,7 +48,8 @@ func main() {
 	urlDecoratorFactory := url_decorators.GetUrlDecoratorFactoryInstance()
 	requestDecorator := gql_auth_header_setters.NewRequestAuthHeader()
 
-	httpService := http_helpers.NewService(httpClient, requestDecorator)
+	httpRequester := http_helpers.NewHttpRequester()
+	httpService := http_helpers.NewService(httpClient, requestDecorator, httpRequester)
 	jsonMarshaller := http_helpers.NewJsonMarshaller()
 
 	listResolver := list.NewResolver(listConv, userConv, todoConv, restUrl, urlDecoratorFactory, httpService, jsonMarshaller)
@@ -80,7 +81,7 @@ func main() {
 		Cache: lru.New[string](100),
 	})
 
-	restHealthService := health.NewService(httpService, httpClient)
+	restHealthService := health.NewService(httpService)
 	restHealthHandler := health.NewHandler(restHealthService, restUrl)
 
 	r := mux.NewRouter()
@@ -88,7 +89,11 @@ func main() {
 	r.HandleFunc("/api/readyz", restHealthHandler.HandleCheckingRestReadyz).Methods(http.MethodGet)
 
 	mainGql := r.PathPrefix("/query").Subrouter()
-	mainGql.Handle("", srv).Methods(http.MethodPost)
-	mainGql.Use(gql_middlewares.NewJwtPopulateMiddleware(), gql_middlewares.ContentTypeMiddlewareFunc())
+	mainGql.Handle("", srv).Methods(http.MethodPost, http.MethodOptions)
+	mainGql.Use(gql_middlewares.ContentTypeMiddlewareFunc(),
+		gql_middlewares.CookieExtractMiddlewareFunc(),
+		gql_middlewares.NewJwtPopulateMiddleware(),
+		gql_middlewares.CorsMiddlewareFunc(configManager.CorsConfig.FrontendUrl))
+
 	configuration.C(context.Background()).Fatal(http.ListenAndServe(":"+port, r))
 }

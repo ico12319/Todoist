@@ -10,8 +10,9 @@ import (
 	"time"
 )
 
+//go:generate mockery --name=randomActivityService --exported --output=./mocks --outpkg=mocks --filename=randomActivity_service.go --with-expecter=true
 type randomActivityService interface {
-	Suggest(context.Context) (*models.RandomActivity, error)
+	Suggest(ctx context.Context) (*models.RandomActivity, error)
 }
 
 type handler struct {
@@ -19,7 +20,9 @@ type handler struct {
 }
 
 func NewHandler(service randomActivityService) *handler {
-	return &handler{service: service}
+	return &handler{
+		service: service,
+	}
 }
 
 func (h *handler) HandleSuggestion(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +37,7 @@ func (h *handler) HandleSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(randomActivity); err != nil {
 		log.C(ctx).Errorf("failed to encode random activity, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)

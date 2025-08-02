@@ -27,22 +27,22 @@ type jsonMarshaller interface {
 }
 
 //go:generate mockery --name=httpResponseGetter --exported --output=./mocks --outpkg=mocks --filename=http_response_getter.go --with-expecter=true
-type httpResponseGetter interface {
+type httpService interface {
 	GetHttpResponse(context.Context, string, string, io.Reader) (*http.Response, error)
 }
 type resolver struct {
 	restUrl        string
 	converter      accessConverter
 	jsonMarshaller jsonMarshaller
-	responseGetter httpResponseGetter
+	httpService    httpService
 }
 
-func NewResolver(converter accessConverter, jsonMarshaller jsonMarshaller, responseGetter httpResponseGetter, restUrl string) *resolver {
+func NewResolver(converter accessConverter, jsonMarshaller jsonMarshaller, httpService httpService, restUrl string) *resolver {
 	return &resolver{
 		restUrl:        restUrl,
 		converter:      converter,
 		jsonMarshaller: jsonMarshaller,
-		responseGetter: responseGetter,
+		httpService:    httpService,
 	}
 }
 
@@ -57,7 +57,7 @@ func (r *resolver) ExchangeRefreshToken(ctx context.Context, input gql.RefreshTo
 		return &gql.Access{}, errors.New("error when trying to marshal JSON refresh payload")
 	}
 
-	resp, err := r.responseGetter.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonRefreshPayload))
+	resp, err := r.httpService.GetHttpResponse(ctx, http.MethodPost, url, bytes.NewReader(jsonRefreshPayload))
 	if err != nil {
 		log.C(ctx).Errorf("failed to exchnage refresh token, error %s when trying to get http response", err.Error())
 		return &gql.Access{}, errors.New("error when trying to get http response")

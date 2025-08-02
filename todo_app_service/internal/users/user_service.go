@@ -12,24 +12,24 @@ import (
 )
 
 type userRepo interface {
-	CreateUser(context.Context, *entities.User) (*entities.User, error)
-	GetUsers(context.Context, sqlQueryRetriever) ([]entities.User, error)
-	GetUser(context.Context, string) (*entities.User, error)
-	GetUserByEmail(context.Context, string) (*entities.User, error)
-	UpdateUserPartially(context.Context, map[string]interface{}, []string) (*entities.User, error)
-	UpdateUser(context.Context, string, *entities.User) (*entities.User, error)
-	DeleteUser(context.Context, string) error
-	DeleteUsers(context.Context) error
-	GetTodosAssignedToUser(context.Context, string, sqlQueryRetriever) ([]entities.Todo, error)
-	GetUserLists(context.Context, sqlQueryRetriever) ([]entities.List, error)
+	CreateUser(ctx context.Context, user *entities.User) (*entities.User, error)
+	GetUsers(ctx context.Context, retriever sqlQueryRetriever) ([]entities.User, error)
+	GetUser(ctx context.Context, userId string) (*entities.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
+	UpdateUserPartially(ctx context.Context, params map[string]interface{}, fields []string) (*entities.User, error)
+	UpdateUser(ctx context.Context, userId string, user *entities.User) (*entities.User, error)
+	DeleteUser(ctx context.Context, userId string) error
+	DeleteUsers(ctx context.Context) error
+	GetTodosAssignedToUser(ctx context.Context, userId string, retriever sqlQueryRetriever) ([]entities.Todo, error)
+	GetUserLists(ctx context.Context, retriever sqlQueryRetriever) ([]entities.List, error)
 }
 
 type userConverter interface {
-	ToModel(*entities.User) *models.User
-	ToEntity(*models.User) *entities.User
-	ConvertFromUpdateModelToModel(*handler_models.UpdateUser) *models.User
-	ConvertFromCreateHandlerModelToModel(*handler_models.CreateUser) *models.User
-	ManyToModel([]entities.User) []*models.User
+	ToModel(user *entities.User) *models.User
+	ToEntity(user *models.User) *entities.User
+	ConvertFromUpdateModelToModel(user *handler_models.UpdateUser) *models.User
+	ConvertFromCreateHandlerModelToModel(user *handler_models.CreateUser) *models.User
+	ManyToModel(users []entities.User) *models.UserPage
 }
 
 type uuidGenerator interface {
@@ -37,15 +37,15 @@ type uuidGenerator interface {
 }
 
 type sqlDecoratorFactory interface {
-	CreateSqlDecorator(context.Context, sql_query_decorators.Filters, string) (sql_query_decorators.SqlQueryRetriever, error)
+	CreateSqlDecorator(ctx context.Context, filters sql_query_decorators.Filters, initialQuery string) (sql_query_decorators.SqlQueryRetriever, error)
 }
 
 type listConverter interface {
-	ManyToModel([]entities.List) []*models.List
+	ManyToModel(lists []entities.List) *models.ListPage
 }
 
 type todoConverter interface {
-	ManyToModel([]entities.Todo) []*models.Todo
+	ManyToModel(todos []entities.Todo) *models.TodoPage
 }
 type service struct {
 	repo       userRepo
@@ -69,7 +69,7 @@ func NewService(repo userRepo, converter userConverter, lConverter listConverter
 	}
 }
 
-func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) ([]*models.User, error) {
+func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) (*models.UserPage, error) {
 	log.C(ctx).Info("getting users in user service")
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -81,7 +81,10 @@ func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFil
 
 	ctx = persistence.SaveToContext(ctx, tx)
 
-	baseQuery := `SELECT id,email,role FROM (SELECT id, email, role FROM users ORDER BY id)`
+	baseQuery := `WITH sorted_users AS(
+ 					SELECT * FROM users ORDER BY id
+				  )
+			     SELECT id, email, role, COUNT(*) OVER() AS total_count FROM sorted_users`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilters, baseQuery)
 	if err != nil {
@@ -95,14 +98,14 @@ func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFil
 		return nil, err
 	}
 
-	modelUsers := s.converter.ManyToModel(userEntities)
+	usersPage := s.converter.ManyToModel(userEntities)
 
 	if err = tx.Commit(); err != nil {
 		log.C(ctx).Errorf("failed to commit transaction when trying to get user records, error %s", err.Error())
 		return nil, err
 	}
 
-	return modelUsers, nil
+	return usersPage, nil
 }
 
 func (s *service) GetUserRecord(ctx context.Context, userId string) (*models.User, error) {
@@ -291,7 +294,7 @@ func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user
 	return updatedModel, nil
 }
 
-func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) ([]*models.List, error) {
+func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) (*models.ListPage, error) {
 	log.C(ctx).Info("getting lists where user participates in user service")
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -303,16 +306,17 @@ func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilte
 
 	ctx = persistence.SaveToContext(ctx, tx)
 
-	if _, err := s.repo.GetUser(ctx, userId); err != nil {
+	if _, err = s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get user lists, error %s when calling user repo", err.Error())
 		return nil, err
 	}
 
 	baseQuery := `WITH sorted_lists_and_users AS(
 				   SELECT * FROM lists LEFT JOIN user_lists ON
-  				   lists.id = user_lists.list_id
+  				   lists.id = user_lists.list_id ORDER BY lists.id;
   				  )
- 				SELECT id, name, created_at, last_updated, owner, description FROM sorted_lists_and_users`
+ 				SELECT id, name, created_at, last_updated, owner, description, COUNT(*) OVER() AS total_count 
+FROM sorted_lists_and_users`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilter, baseQuery)
 	if err != nil {
@@ -336,7 +340,7 @@ func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilte
 	return listModels, nil
 }
 
-func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) ([]*models.Todo, error) {
+func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) (*models.TodoPage, error) {
 	log.C(ctx).Info("getting todos assigned to user in user service")
 
 	tx, err := s.transact.BeginContext(ctx)
@@ -360,7 +364,8 @@ func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, use
 				   JOIN users ON todos.assigned_to = users.id ORDER BY todos.id
  			      )
 				SELECT id, name, description, list_id, status, created_at,
-				last_updated, assigned_to, due_date, priority FROM sorted_todo_cte WHERE user_id = $1`
+				last_updated, assigned_to, due_date, priority, COUNT(*) OVER() AS total_count
+FROM sorted_todo_cte WHERE user_id = $1`
 
 	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseQuery)
 	if err != nil {

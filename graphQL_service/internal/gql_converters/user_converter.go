@@ -27,14 +27,29 @@ func (*userConverter) ToGQL(user *models.User) *gql.User {
 	}
 }
 
-func (u *userConverter) ManyToGQL(users []*models.User) []*gql.User {
+func (u *userConverter) ToUserPageGQL(userPage *models.UserPage) *gql.UserPage {
+	if userPage == nil {
+		return nil
+	}
+
+	users := userPage.Data
 	gqlUsers := make([]*gql.User, len(users))
 
 	for index, user := range users {
 		gqlUser := u.ToGQL(user)
 		gqlUsers[index] = gqlUser
 	}
-	return gqlUsers
+
+	return &gql.UserPage{
+		Data: gqlUsers,
+		PageInfo: &gql.PageInfo{
+			HasPrevPage: userPage.PageInfo.HasPrevPage,
+			HasNextPage: userPage.PageInfo.HasNextPage,
+			StartCursor: userPage.PageInfo.StartCursor,
+			EndCursor:   userPage.PageInfo.EndCursor,
+		},
+		TotalCount: int32(userPage.TotalCount),
+	}
 }
 
 func (*userConverter) FromCollaboratorInputToAddCollaboratorHandlerModel(user *gql.CollaboratorInput) *handler_models.AddCollaborator {
@@ -43,7 +58,7 @@ func (*userConverter) FromCollaboratorInputToAddCollaboratorHandlerModel(user *g
 	}
 
 	return &handler_models.AddCollaborator{
-		Id: user.UserID,
+		Email: user.UserEmail,
 	}
 }
 

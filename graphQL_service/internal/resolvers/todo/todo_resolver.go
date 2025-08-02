@@ -17,33 +17,33 @@ import (
 	"net/http"
 )
 
-type httpResponseGetter interface {
-	GetHttpResponseWithAuthHeader(context.Context, string, string, io.Reader) (*http.Response, error)
+type httpService interface {
+	GetHttpResponseWithAuthHeader(ctx context.Context, httpMethod string, url string, body io.Reader) (*http.Response, error)
 }
 
 type urlDecoratorFactory interface {
-	CreateUrlDecorator(context.Context, string, url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
+	CreateUrlDecorator(ctx context.Context, url string, uFilters url_decorators.UrlFilters) url_decorators.QueryParamsRetrievers
 }
 
 type jsonMarshaller interface {
-	Marshal(interface{}) ([]byte, error)
+	Marshal(obj interface{}) ([]byte, error)
 }
 
 type todoConverter interface {
-	ToGQL(*models.Todo) *gql.Todo
-	ManyToGQL([]*models.Todo) []*gql.Todo
-	ToHandlerModel(*gql.UpdateTodoInput) *handler_models.UpdateTodo
-	CreateTodoInputToModel(*gql.CreateTodoInput) *handler_models.CreateTodo
-	FromGQLModelToDeleteTodoPayload(*gql.Todo, bool) *gql.DeleteTodoPayload
-	ManyToDeleteTodoPayload([]*gql.Todo, bool) []*gql.DeleteTodoPayload
+	ToGQL(todo *models.Todo) *gql.Todo
+	ToTodoPageGQL(todoPage *models.TodoPage) *gql.TodoPage
+	ToHandlerModel(todo *gql.UpdateTodoInput) *handler_models.UpdateTodo
+	CreateTodoInputToModel(todo *gql.CreateTodoInput) *handler_models.CreateTodo
+	FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bool) *gql.DeleteTodoPayload
+	ManyToDeleteTodoPayload(todos []*gql.Todo, success bool) []*gql.DeleteTodoPayload
 }
 
 type listConverter interface {
-	ToGQL(*models.List) *gql.List
+	ToGQL(list *models.List) *gql.List
 }
 
 type userConverter interface {
-	ToGQL(*models.User) *gql.User
+	ToGQL(list *models.User) *gql.User
 }
 
 type resolver struct {
@@ -53,10 +53,10 @@ type resolver struct {
 	lConverter     listConverter
 	restUrl        string
 	jsonMarshaller jsonMarshaller
-	responseGetter httpResponseGetter
+	httpService    httpService
 }
 
-func NewResolver(factory urlDecoratorFactory, tConverter todoConverter, uConverter userConverter, lConverter listConverter, restUrl string, jsonMarshaller jsonMarshaller, responseGetter httpResponseGetter) *resolver {
+func NewResolver(factory urlDecoratorFactory, tConverter todoConverter, uConverter userConverter, lConverter listConverter, restUrl string, jsonMarshaller jsonMarshaller, httpService httpService) *resolver {
 	return &resolver{
 		factory:        factory,
 		tConverter:     tConverter,
@@ -64,7 +64,7 @@ func NewResolver(factory urlDecoratorFactory, tConverter todoConverter, uConvert
 		lConverter:     lConverter,
 		restUrl:        restUrl,
 		jsonMarshaller: jsonMarshaller,
-		responseGetter: responseGetter,
+		httpService:    httpService,
 	}
 }
 
@@ -74,15 +74,12 @@ func (r *resolver) Todos(ctx context.Context, filter *url_filters.TodoFilters) (
 	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.TODO_PATH, filter)
 
 	url, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
-
-	log.C(ctx).Errorf("greshkata batyo %s", url)
-
 	if err != nil {
 		log.C(ctx).Errorf("failed to determine correct query param in todo resolver")
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -94,23 +91,13 @@ func (r *resolver) Todos(ctx context.Context, filter *url_filters.TodoFilters) (
 		return nil, err
 	}
 
-	var todos []*models.Todo
-	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+	var todoPage models.TodoPage
+	if err = json.NewDecoder(resp.Body).Decode(&todoPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	gqlTodos := r.tConverter.ManyToGQL(todos)
-
-	pageInfo := utils.InitPageInfo[*gql.Todo](gqlTodos, func(todo *gql.Todo) string {
-		return todo.ID
-	})
-
-	return &gql.TodoPage{
-		Data:       gqlTodos,
-		PageInfo:   pageInfo,
-		TotalCount: int32(len(gqlTodos)),
-	}, nil
+	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
 func (r *resolver) Todo(ctx context.Context, id string) (*gql.Todo, error) {
@@ -136,20 +123,20 @@ func (r *resolver) DeleteTodosByListID(ctx context.Context, id string) ([]*gql.D
 	formattedSuffix := fmt.Sprintf("/%s%s", id, gql_constants.TODO_PATH)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	gqlTodos, err := r.getTodosByListId(ctx, id)
+	gqlTodoPage, err := r.getTodosByListId(ctx, id)
 	if err != nil {
 		log.C(ctx).Errorf("failed to delete todos by list_id %s, error when trying to get list's todos", id)
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.tConverter.ManyToDeleteTodoPayload(gqlTodos, true), nil
+	return r.tConverter.ManyToDeleteTodoPayload(gqlTodoPage.Data, true), nil
 }
 
 func (r *resolver) UpdateTodo(ctx context.Context, id string, input gql.UpdateTodoInput) (*gql.Todo, error) {
@@ -166,7 +153,7 @@ func (r *resolver) UpdateTodo(ctx context.Context, id string, input gql.UpdateTo
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodPatch, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -213,7 +200,7 @@ func (r *resolver) DeleteTodo(ctx context.Context, id string) (*gql.DeleteTodoPa
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -234,14 +221,14 @@ func (r *resolver) DeleteTodos(ctx context.Context) ([]*gql.DeleteTodoPayload, e
 
 	url := r.restUrl + gql_constants.TODO_PATH
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return r.tConverter.ManyToDeleteTodoPayload(gqlTodos, true), nil
+	return r.tConverter.ManyToDeleteTodoPayload(gqlTodos.Data, true), nil
 }
 
 func (r *resolver) CreateTodo(ctx context.Context, input gql.CreateTodoInput) (*gql.Todo, error) {
@@ -257,7 +244,7 @@ func (r *resolver) CreateTodo(ctx context.Context, input gql.CreateTodoInput) (*
 		return nil, err
 	}
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -284,7 +271,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, er
 	formattedSuffix := fmt.Sprintf("/%s/assignee", obj.ID)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -317,7 +304,7 @@ func (r *resolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, error) {
 	formattedSuffix := fmt.Sprintf("/%s", modelTodo.ListId)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -344,7 +331,7 @@ func (r *resolver) getModelTodo(ctx context.Context, id string) (*models.Todo, e
 	formattedSuffix := fmt.Sprintf("/%s", id)
 	url := r.restUrl + gql_constants.TODO_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -370,13 +357,13 @@ func (r *resolver) getModelTodo(ctx context.Context, id string) (*models.Todo, e
 	return &todo, nil
 }
 
-func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.Todo, error) {
+func (r *resolver) getTodosByListId(ctx context.Context, listId string) (*gql.TodoPage, error) {
 	log.C(ctx).Infof("getting todos by list_id %s", listId)
 
 	formattedSuffix := fmt.Sprintf("/%s%s", listId, gql_constants.TODO_PATH)
 	url := r.restUrl + gql_constants.LISTS_PATH + formattedSuffix
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -393,21 +380,21 @@ func (r *resolver) getTodosByListId(ctx context.Context, listId string) ([]*gql.
 		return nil, err
 	}
 
-	var todos []*models.Todo
-	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+	var todoPage models.TodoPage
+	if err = json.NewDecoder(resp.Body).Decode(&todoPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response, error %s", err.Error())
 		return nil, err
 	}
 
-	return r.tConverter.ManyToGQL(todos), nil
+	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
-func (r *resolver) getTodos(ctx context.Context) ([]*gql.Todo, error) {
+func (r *resolver) getTodos(ctx context.Context) (*gql.TodoPage, error) {
 	log.C(ctx).Info("getting todos without filters in todo resolver")
 
 	url := r.restUrl + gql_constants.TODO_PATH
 
-	resp, err := r.responseGetter.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
+	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in todo resolver, error %s", err.Error())
 		return nil, err
@@ -419,11 +406,11 @@ func (r *resolver) getTodos(ctx context.Context) ([]*gql.Todo, error) {
 		return nil, err
 	}
 
-	var todos []*models.Todo
-	if err = json.NewDecoder(resp.Body).Decode(&todos); err != nil {
+	var todoPage models.TodoPage
+	if err = json.NewDecoder(resp.Body).Decode(&todoPage); err != nil {
 		log.C(ctx).Errorf("failed to decode http response body, error %s", err.Error())
 		return nil, err
 	}
 
-	return r.tConverter.ManyToGQL(todos), nil
+	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }

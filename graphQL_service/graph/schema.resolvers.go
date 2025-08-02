@@ -174,41 +174,6 @@ func (r *todoResolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, erro
 	return r.tResolver.List(ctx, obj)
 }
 
-// AssignedTo is the resolver for the assigned_to field.
-func (r *todoResolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, error) {
-	return r.tResolver.AssignedTo(ctx, obj)
-}
-
-// AssignedTo is the resolver for the assigned_to field.
-func (r *userResolver) AssignedTo(ctx context.Context, obj *gql.User, filter *gql.TodosFilterInput, limit *int32, after *string) (*gql.TodoPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.TodoFilters{
-		BaseFilters: url_filters.BaseFilters{
-			Limit:  &parsedLimit,
-			Cursor: after,
-		},
-		TodoFilters: filter,
-	}
-
-	return r.uResolver.AssignedTo(ctx, obj, filters)
-}
-
-// ParticipateIn is the resolver for the participate_in field.
-func (r *userResolver) ParticipateIn(ctx context.Context, obj *gql.User, filter *gql.UserRoleFilter, limit *int32, after *string) (*gql.ListPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.UserFilters{
-		BaseFilters: url_filters.BaseFilters{
-			Limit:  &parsedLimit,
-			Cursor: after,
-		},
-		UserFilters: filter,
-	}
-
-	return r.uResolver.ParticipateIn(ctx, obj, filters)
-}
-
 // List returns ListResolver implementation.
 func (r *Resolver) List() ListResolver { return &listResolver{r} }
 
@@ -221,11 +186,7 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 // Todo returns TodoResolver implementation.
 func (r *Resolver) Todo() TodoResolver { return &todoResolver{r} }
 
-// User returns UserResolver implementation.
-func (r *Resolver) User() UserResolver { return &userResolver{r} }
-
 type listResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type todoResolver struct{ *Resolver }
-type userResolver struct{ *Resolver }

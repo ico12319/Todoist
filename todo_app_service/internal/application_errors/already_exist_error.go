@@ -14,12 +14,3 @@ func NewAlreadyExistError(target string, name string) *AlreadyExistError {
 func (a AlreadyExistError) Error() string {
 	return fmt.Sprintf("a %s with identifier %q already exists", a.target, a.name)
 }
-
-func (a AlreadyExistError) Is(target error) bool {
-	t, ok := target.(*AlreadyExistError)
-	if !ok {
-		return false
-	}
-
-	return a.target == t.target && a.name == t.name
-}

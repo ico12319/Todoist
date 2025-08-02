@@ -36,7 +36,12 @@ func (*todoConverter) ToGQL(todo *models.Todo) *gql.Todo {
 	}
 }
 
-func (t *todoConverter) ManyToGQL(todos []*models.Todo) []*gql.Todo {
+func (t *todoConverter) ToTodoPageGQL(todoPage *models.TodoPage) *gql.TodoPage {
+	if todoPage == nil {
+		return nil
+	}
+
+	todos := todoPage.Data
 	gqlTodos := make([]*gql.Todo, len(todos))
 
 	for index, todo := range todos {
@@ -44,7 +49,16 @@ func (t *todoConverter) ManyToGQL(todos []*models.Todo) []*gql.Todo {
 		gqlTodos[index] = gqlTodo
 	}
 
-	return gqlTodos
+	return &gql.TodoPage{
+		Data: gqlTodos,
+		PageInfo: &gql.PageInfo{
+			HasPrevPage: todoPage.PageInfo.HasPrevPage,
+			HasNextPage: todoPage.PageInfo.HasNextPage,
+			StartCursor: todoPage.PageInfo.StartCursor,
+			EndCursor:   todoPage.PageInfo.EndCursor,
+		},
+		TotalCount: int32(todoPage.TotalCount),
+	}
 }
 
 func (t *todoConverter) ToHandlerModel(todoInput *gql.UpdateTodoInput) *handler_models.UpdateTodo {
@@ -91,7 +105,7 @@ func (*todoConverter) FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bo
 		Priority:    &todo.Priority,
 		CreatedAt:   &todo.CreatedAt,
 		LastUpdated: &todo.LastUpdated,
-		DueData:     todo.DueData,
+		DueDate:     todo.DueData,
 	}
 }
 

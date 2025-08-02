@@ -8,7 +8,7 @@ import (
 
 // abstract component!
 type QueryParamsRetrievers interface {
-	DetermineCorrectQueryParams(context.Context, string) (string, error)
+	DetermineCorrectQueryParams(ctx context.Context, serverAddress string) (string, error)
 }
 
 // concrete component!
@@ -16,7 +16,7 @@ type baseUrl struct {
 	initialUrl string
 }
 
-func newBaseUrl(initialUrl string) QueryParamsRetrievers {
+func NewBaseUrl(initialUrl string) QueryParamsRetrievers {
 	return &baseUrl{initialUrl: initialUrl}
 }
 

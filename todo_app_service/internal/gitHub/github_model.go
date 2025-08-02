@@ -6,8 +6,3 @@ type Organization struct {
 type UserInfo struct {
 	Email *string `json:"email"`
 }
-
-type GitHubResponse struct {
-	ParticipatesIn []Organization
-	UserInfo
-}
