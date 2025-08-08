@@ -1,0 +1,116 @@
+<mvc:View
+  xmlns="sap.m"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns:core="sap.ui.core"
+  controllerName="ui5.walkthrough.controller.Lists"
+  class="listPageBackground"
+  displayBlock="true">
+
+   <HBox width="100%" justifyContent="Center" class="todosHeadlineBox">
+  <Image src="images/waving-gopher.png"
+         class="todosGopher"/>
+</HBox>
+
+  <VBox class="sapUiSmallMargin pageContentFadeIn">
+    <VBox class="tablePeekWrap">
+      <Table id="listsTable"
+             width="100%"
+             class="myFancyTable neoGlass neonTable sapUiSizeCompact columns"
+             items="{lists>/lists}"
+             sticky="ColumnHeaders,HeaderToolbar,InfoToolbar"
+             growing="true"
+             growingScrollToLoad="true"
+             growingThreshold="12"
+             noDataText="No lists yet">
+
+        <headerToolbar>
+          <Toolbar design="Transparent" class="noHeaderDivider tableHeaderToolbar">
+            <HBox alignItems="Center">
+              <core:Icon src="sap-icon://checklist-item" class="titleIcon"/>
+              <Title text="Available lists" level="H4" class="titleNeon"/>
+              <ObjectStatus text="{= ${lists>/totalCount} ? ${lists>/totalCount} + ' items' : ''}"
+                            state="Success"
+                            class="countBadge sapUiTinyMarginBegin"/>
+            </HBox>
+
+            <ToolbarSpacer/>
+
+            <SearchField width="18rem" placeholder="Search…" class="searchNeo">
+              <layoutData>
+                <ToolbarLayoutData shrinkable="false"/>
+              </layoutData>
+            </SearchField>
+
+            <ToolbarSpacer/>
+            <Button id="btnCreateList"
+                    icon="sap-icon://add"
+                    text="Create List"
+                    type="Emphasized"
+                    class="createBtnNeo"
+                    press=".onAddPress"/>
+          </Toolbar>
+        </headerToolbar>
+
+        <infoToolbar>
+          <Toolbar design="Transparent" class="infoStripe">
+            <core:Icon src="sap-icon://filter" class="infoIcon"/>
+            <Text text="Showing recent lists" class="infoText"/>
+            <ToolbarSpacer/>
+            <Text text="{= ${lists>/pageInfo/endCursor} ? 'Cursor: ' + ${lists>/pageInfo/endCursor} : ''}" class="cursorHint"/>
+          </Toolbar>
+        </infoToolbar>
+
+        <columns>
+          <Column width="14rem" hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://key" class="colIcon"/>
+              <Text text="ID" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://product" class="colIcon"/>
+              <Text text="Name" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://description" class="colIcon"/>
+              <Text text="Description" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column width="8rem" hAlign="Center" class="lightGreen">
+            <VBox alignItems="Center">
+              <Text text="Actions" class="colHead"/>
+            </VBox>
+          </Column>
+        </columns>
+
+        <items>
+          <ColumnListItem vAlign="Middle" class="rowHoverGlow">
+            <cells>
+              <Text text="{lists>id}" class="monoText"/>
+              <ObjectIdentifier title="{lists>name}" text="" class="nameCell"/>
+              <Text text="{lists>description}" class="descCell multiLine"/>
+              <HBox justifyContent="Center" class="actionsHBox">
+                <Button icon="sap-icon://information" type="Transparent" tooltip="Info" class="actionNeo" press=".onInfoPress"/>
+                <Button icon="sap-icon://collaborate" type="Transparent" tooltip="Show collaborators" class="actionNeo" press=".onCollaboratorsPress"/>
+                <Button icon="sap-icon://edit" type="Transparent" tooltip="Edit" class="actionNeo" press=".onEditPress"/>
+                <Button icon="sap-icon://delete" type="Transparent" tooltip="Delete" class="actionNeo" press=".onDeletePress"/>
+              </HBox>
+            </cells>
+          </ColumnListItem>
+        </items>
+      </Table>
+    </VBox>
+
+    <HBox width="100%" justifyContent="End" alignItems="Center"
+          class="paginationHBox neonPager sapUiSmallMarginTop">
+      <Button id="btnPrev" text="Previous" class="pagerBtn" enabled="{lists>/hasPrev}" press=".onPrevPage"/>
+      <Button id="btnNext" text="Next" class="pagerBtn" enabled="{lists>/hasNext}" press=".onNextPage"/>
+    </HBox>
+  </VBox>
+</mvc:View>
