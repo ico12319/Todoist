@@ -5,17 +5,33 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
-type repository struct{}
+type genericRepository interface {
+	GetPaginationInfo(ctx context.Context, sourceName string, filter string, params []interface{}) (*entities.PaginationInfo, error)
+}
 
-func NewRepo() *repository {
-	return &repository{}
+type sqlDecoratorFactory interface {
+	CreateSqlDecorator(context.Context, sql_query_decorators.Filters, string) (sql_query_decorators.SqlQueryRetriever, error)
+}
+
+type repository struct {
+	genericRepo genericRepository
+	factory     sqlDecoratorFactory
+}
+
+func NewRepo(genericRepo genericRepository, factory sqlDecoratorFactory) *repository {
+	return &repository{
+		genericRepo: genericRepo,
+		factory:     factory,
+	}
 }
 
 func (*repository) GetList(ctx context.Context, listId string) (*entities.List, error) {
@@ -40,6 +56,7 @@ FROM lists where id = $1`
 		log.C(ctx).Errorf("failed to get list with id %s due to database error", listId)
 		return nil, err
 	}
+
 	return &entity, nil
 }
 
@@ -102,7 +119,7 @@ func (*repository) DeleteLists(ctx context.Context) error {
 	return nil
 }
 
-func (*repository) GetLists(ctx context.Context, queryBuilder sql_query_decorators.SqlQueryRetriever) ([]entities.List, error) {
+func (r *repository) GetLists(ctx context.Context, f *filters.BaseFilters) ([]entities.List, error) {
 	log.C(ctx).Info("getting all lists from list repository")
 
 	persist, err := persistence.FromCtx(ctx)
@@ -111,15 +128,25 @@ func (*repository) GetLists(ctx context.Context, queryBuilder sql_query_decorato
 		return nil, err
 	}
 
-	sqlQueryString := queryBuilder.DetermineCorrectSqlQuery(ctx)
+	baseQuery := `SELECT id, name, created_at, last_updated, owner, description FROM lists`
+	retriever, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
+	if err != nil {
+		log.C(ctx).Error("failed to determine sql query, error when calling decorator factory")
+		return nil, err
+	}
 
-	var entities []entities.List
-	if err = persist.SelectContext(ctx, &entities, sqlQueryString); err != nil {
+	sqlQueryString := retriever.DetermineCorrectSqlQuery(ctx)
+
+	completeQuery := fmt.Sprintf(`SELECT id, name, created_at, last_updated, owner, description
+FROM (%s) ORDER BY id`, sqlQueryString)
+
+	var lists []entities.List
+	if err = persist.SelectContext(ctx, &lists, completeQuery); err != nil {
 		log.C(ctx).Errorf("failed to parse list entities due to a failure in the execution of the sql query %s", err.Error())
 		return nil, err
 	}
 
-	return entities, nil
+	return lists, nil
 }
 
 func (r *repository) UpdateList(ctx context.Context, sqlExecParams map[string]interface{}, sqlFields []string) (*entities.List, error) {
@@ -205,7 +232,7 @@ func (*repository) DeleteCollaborator(ctx context.Context, listId string, userId
 	return nil
 }
 
-func (*repository) GetListCollaborators(ctx context.Context, listId string, sqlQueryBuilder sql_query_decorators.SqlQueryRetriever) ([]entities.User, error) {
+func (r *repository) GetListCollaborators(ctx context.Context, listID string, f *filters.BaseFilters) ([]entities.User, error) {
 	log.C(ctx).Info("getting list's collaborators in list repository")
 
 	persist, err := persistence.FromCtx(ctx)
@@ -214,10 +241,18 @@ func (*repository) GetListCollaborators(ctx context.Context, listId string, sqlQ
 		return nil, err
 	}
 
+	baseQuery := `SELECT id, email, role FROM lists_collaborators WHERE list_id = $1`
+	sqlQueryBuilder, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get collaborators, error when calling decorator factory")
+		return nil, err
+	}
+
 	sqlQueryString := sqlQueryBuilder.DetermineCorrectSqlQuery(ctx)
+	completeSqlQuery := fmt.Sprintf(`SELECT id, email, role FROM (%s) ORDER BY id`, sqlQueryString)
 
 	var collaborators []entities.User
-	if err = persist.SelectContext(ctx, &collaborators, sqlQueryString, listId); err != nil {
+	if err = persist.SelectContext(ctx, &collaborators, completeSqlQuery, listID); err != nil {
 		log.C(ctx).Errorf("failed to get list's collaborators due to an error %s in the execution of the sql query", err.Error())
 		return nil, err
 	}
@@ -279,4 +314,16 @@ WHERE list_id = $1 AND user_id = $2`
 	}
 
 	return true, nil
+}
+
+func (r *repository) GetListsPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error) {
+	log.C(ctx).Info("getting pagination info about lists in list repo")
+
+	return r.genericRepo.GetPaginationInfo(ctx, "lists", "TRUE", nil)
+}
+
+func (r *repository) GetListCollaboratorsPaginationInfo(ctx context.Context, listID string) (*entities.PaginationInfo, error) {
+	log.C(ctx).Infof("getting pagination info about collaborators of list with id %s in list repo", listID)
+
+	return r.genericRepo.GetPaginationInfo(ctx, "lists_collaborators", `list_id = $1`, []interface{}{listID})
 }

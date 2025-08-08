@@ -56,21 +56,38 @@ func (*userConverter) ConvertFromCreateHandlerModelToModel(user *handler_models.
 	}
 }
 
-func (u *userConverter) ManyToModel(users []entities.User) *models.UserPage {
+func (u *userConverter) ManyToPage(users []entities.User, pageInfo *entities.PaginationInfo) *models.UserPage {
+	if len(users) == 0 || pageInfo == nil || !pageInfo.LastID.Valid || !pageInfo.FirstID.Valid {
+		return &models.UserPage{
+			Data: make([]*models.User, 0),
+			PageInfo: &pagination.Page{
+				HasNextPage: false,
+				HasPrevPage: false,
+			},
+			TotalCount: 0,
+		}
+	}
+
 	modelUsers := make([]*models.User, 0, len(users))
 	for _, entity := range users {
 		model := u.ToModel(&entity)
 		modelUsers = append(modelUsers, model)
 	}
 
+	startCursor := modelUsers[0].Id
+	endCursor := modelUsers[len(users)-1].Id
+
+	lastEntityID := pageInfo.LastID.UUID.String()
+	firstEntityID := pageInfo.FirstID.UUID.String()
+
 	return &models.UserPage{
 		Data:       modelUsers,
-		TotalCount: users[0].TotalCount,
+		TotalCount: pageInfo.TotalCount,
 		PageInfo: &pagination.Page{
-			StartCursor: users[0].Id.String(),
-			EndCursor:   users[len(users)-1].Id.String(),
-			HasNextPage: users[0].TotalCount > len(users),
-			HasPrevPage: false,
+			StartCursor: startCursor,
+			EndCursor:   endCursor,
+			HasNextPage: endCursor != lastEntityID,
+			HasPrevPage: startCursor != firstEntityID,
 		},
 	}
 }

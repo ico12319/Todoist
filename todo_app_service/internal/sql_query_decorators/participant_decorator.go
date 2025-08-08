@@ -22,9 +22,8 @@ func (p *participantDecorator) DetermineCorrectSqlQuery(ctx context.Context) str
 	log.C(ctx).Info("determining correct sql query in participant decorator")
 
 	currentQuery := p.inner.DetermineCorrectSqlQuery(ctx)
-	addition := determineUserListsAddition(currentQuery)
 
-	formattedSuffix := fmt.Sprintf(" %s user_id = '%s'", addition, p.participantId)
+	formattedSuffix := fmt.Sprintf(" AND user_id = '%s'", p.participantId)
 
 	currentQuery += formattedSuffix
 

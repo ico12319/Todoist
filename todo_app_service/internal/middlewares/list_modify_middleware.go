@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -24,12 +25,17 @@ type listService interface {
 }
 
 type listModifyMiddleware struct {
-	next http.Handler
-	serv listService
+	next     http.Handler
+	serv     listService
+	transact persistence.Transactioner
 }
 
-func newListAccessMiddleware(next http.Handler, serv listService) *listModifyMiddleware {
-	return &listModifyMiddleware{next: next, serv: serv}
+func newListAccessMiddleware(next http.Handler, serv listService, transact persistence.Transactioner) *listModifyMiddleware {
+	return &listModifyMiddleware{
+		next:     next,
+		serv:     serv,
+		transact: transact,
+	}
 }
 
 func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +54,17 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	list, err := a.serv.GetListRecord(r.Context(), listId)
+	tx, err := a.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list modify middleware, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer a.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	list, err := a.serv.GetListRecord(ctx, listId)
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s", err.Error(), list)
 
@@ -66,8 +82,14 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authUsersPage, err := a.serv.GetCollaborators(r.Context(), listId, &filters.BaseFilters{})
+	authUsersPage, err := a.serv.GetCollaborators(ctx, listId, &filters.BaseFilters{})
 	if err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction in list modify middleware, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -83,9 +105,9 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	utils.EncodeError(w, "access forbidden: only administrators, collaborators or the list creator, may create/modify list related entity", http.StatusForbidden)
 }
 
-func ListAccessPermissionMiddlewareFunc(serv listService) mux.MiddlewareFunc {
+func ListAccessPermissionMiddlewareFunc(serv listService, transact persistence.Transactioner) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
-		return newListAccessMiddleware(next, serv)
+		return newListAccessMiddleware(next, serv, transact)
 	}
 }
 

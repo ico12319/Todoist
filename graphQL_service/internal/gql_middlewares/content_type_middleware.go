@@ -20,7 +20,14 @@ func (c *contentTypeMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request
 	log.C(ctx).Info("setting content type to JSON in gql_service")
 
 	w.Header().Set("Content-Type", constants.CONTENT_TYPE)
+
+	if c.next == nil {
+		log.C(ctx).Info("nil e bee ei tuka ei tuiii")
+	}
+
+	log.C(ctx).Info("nema kak da e tuka")
 	c.next.ServeHTTP(w, r)
+	log.C(ctx).Info("plssdasdaf")
 }
 
 func ContentTypeMiddlewareFunc() mux.MiddlewareFunc {

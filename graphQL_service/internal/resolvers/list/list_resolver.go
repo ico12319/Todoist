@@ -179,7 +179,7 @@ func (r *resolver) Todos(ctx context.Context, obj *gql.List, filters *url_filter
 		log.C(ctx).Errorf("failed to get list todos, error when calling factory function")
 		return utils.InitEmptyTodoPage(), err
 	}
-
+	log.C(ctx).Errorf("ei go tupq url %s", url)
 	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response, error %s", err.Error())

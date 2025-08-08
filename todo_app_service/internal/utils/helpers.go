@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/gitHub"
+	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	config "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
@@ -14,7 +15,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v5"
-	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -91,10 +91,15 @@ func GetContentFromUrl(r *http.Request, fieldName string) string {
 }
 
 func GetLimitFromUrl(r *http.Request) string {
-	limit := GetContentFromUrl(r, constants.LIMIT)
+	limit := GetContentFromUrl(r, constants.FIRST)
 	if len(limit) == 0 {
-		return constants.DEFAULT_LIMIT_VALUE
+		limit = GetContentFromUrl(r, constants.LAST)
 	}
+
+	if len(limit) == 0 {
+		limit = constants.DEFAULT_LIMIT_VALUE
+	}
+
 	return limit
 }
 
@@ -115,7 +120,6 @@ func getOrganizationNames(organizations []*gitHub.Organization) []string {
 	orgNames := make([]string, 0, len(organizations))
 	for _, org := range organizations {
 		orgNames = append(orgNames, org.Login)
-		log.Printf("name: %s", org)
 	}
 	return orgNames
 }
@@ -245,4 +249,11 @@ func CheckForNotFoundError(err error) bool {
 	}
 
 	return false
+}
+
+func DetermineSortingOrder(f *filters.BaseFilters) string {
+	if len(f.Last) != 0 {
+		return constants.DESC_ORDER
+	}
+	return constants.ASC_ORDER
 }

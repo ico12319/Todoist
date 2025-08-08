@@ -3,6 +3,7 @@ package todos
 import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	middlewares2 "Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -34,15 +35,30 @@ type fieldsValidator interface {
 type handler struct {
 	serv       todoService
 	fValidator fieldsValidator
+	transact   persistence.Transactioner
 }
 
-func NewHandler(serv todoService, fValidator fieldsValidator) *handler {
-	return &handler{serv: serv, fValidator: fValidator}
+func NewHandler(serv todoService, fValidator fieldsValidator, transact persistence.Transactioner) *handler {
+	return &handler{
+		serv:       serv,
+		fValidator: fValidator,
+		transact:   transact,
+	}
 }
 
 func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo assignee in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	todoId, err := utils.GetValueFromContext[string](ctx, middlewares2.TodoId)
 	if err != nil {
@@ -59,8 +75,13 @@ func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(assignee); err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo assignee, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -69,8 +90,18 @@ func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) 
 func (h *handler) HandleTodoCreation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	var todo handler_models.CreateTodo
-	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&todo); err != nil {
 		utils.EncodeError(w, constants.INVALID_REQUEST_BODY, http.StatusBadRequest)
 		return
 	}
@@ -95,27 +126,53 @@ func (h *handler) HandleTodoCreation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(modelTodo); err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to create todo, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo in todo handler")
 
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	status := utils.GetContentFromUrl(r, constants.STATUS)
 	priority := utils.GetContentFromUrl(r, constants.PRIORITY)
-	limit := utils.GetLimitFromUrl(r)
-	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+
+	first := utils.GetContentFromUrl(r, constants.FIRST)
+	after := utils.GetContentFromUrl(r, constants.AFTER)
+	before := utils.GetContentFromUrl(r, constants.BEFORE)
+	last := utils.GetContentFromUrl(r, constants.LAST)
+
+	if len(first) == 0 && len(last) == 0 {
+		first = constants.DEFAULT_LIMIT_VALUE
+	}
+
 	overdue := utils.GetContentFromUrl(r, constants.OVERDUE)
 
 	tFilter := &filters.TodoFilters{
 		BaseFilters: filters.BaseFilters{
-			Limit:  limit,
-			Cursor: cursor,
+			First:  first,
+			Last:   last,
+			After:  after,
+			Before: before,
 		},
 		Status:   status,
 		Priority: priority,
@@ -128,8 +185,13 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(todos); err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todos, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -138,6 +200,16 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 func (h *handler) HandleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting todo in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	todoId, err := utils.GetValueFromContext[string](ctx, middlewares2.TodoId)
 	if err != nil {
@@ -150,12 +222,28 @@ func (h *handler) HandleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete todo with id %s, error %s", todoId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("updating todo in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	todoId, err := utils.GetValueFromContext[string](ctx, middlewares2.TodoId)
 	if err != nil {
@@ -186,17 +274,33 @@ func (h *handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(&updatedModel); err != nil {
 		log.C(ctx).Errorf("failed to update todo record, error when trying to encode json reponse %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to update todo with id %s, error %s", todoId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	todoId, err := utils.GetValueFromContext[string](ctx, middlewares2.TodoId)
 	if err != nil {
@@ -217,27 +321,55 @@ func (h *handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo with id %s, error %s", todoId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *handler) HandleDeleteTodos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("deleting todos in todo handler")
 
-	err := h.serv.DeleteTodosRecords(ctx)
-
+	tx, err := h.transact.BeginContext(ctx)
 	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = h.serv.DeleteTodosRecords(ctx); err != nil {
 		log.C(ctx).Errorf("failed to delete todos in todo handler due to an erroo in todo service")
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete todos, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("getting todos by list_id in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](ctx, middlewares2.ListId)
 	if err != nil {
@@ -246,15 +378,28 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	limit := utils.GetLimitFromUrl(r)
-	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+	first := utils.GetContentFromUrl(r, constants.FIRST)
+	after := utils.GetContentFromUrl(r, constants.AFTER)
+	before := utils.GetContentFromUrl(r, constants.BEFORE)
+	last := utils.GetContentFromUrl(r, constants.LAST)
+
+	if len(first) == 0 && len(last) == 0 {
+		first = constants.DEFAULT_LIMIT_VALUE
+	} else if len(first) != 0 && len(last) != 0 {
+		log.C(ctx).Warn("both first and last passed as query params...")
+		utils.EncodeError(w, "can't pass both first and last values as query params", http.StatusBadRequest)
+		return
+	}
+
 	status := utils.GetContentFromUrl(r, constants.STATUS)
 	priority := utils.GetContentFromUrl(r, constants.PRIORITY)
 
 	f := &filters.TodoFilters{
 		BaseFilters: filters.BaseFilters{
-			Limit:  limit,
-			Cursor: cursor,
+			First:  first,
+			After:  after,
+			Before: before,
+			Last:   last,
 		},
 		Status:   status,
 		Priority: priority,
@@ -263,13 +408,17 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 	todos, err := h.serv.GetTodosByListId(ctx, f, listId)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos by list_id, error in todo service")
-
 		utils.EncodeErrorWithCorrectStatusCode(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(todos); err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todos by list id %s, error %s", listId, err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -278,6 +427,16 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 func (h *handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("deleting todos by list_id in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](ctx, middlewares2.ListId)
 	if err != nil {
@@ -294,12 +453,27 @@ func (h *handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to delete todos by list id %s, error %s", listId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) HandleGetTodoByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo from list in todo handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction todo handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](ctx, middlewares2.ListId)
 	if err != nil {
@@ -327,6 +501,10 @@ func (h *handler) HandleGetTodoByListId(w http.ResponseWriter, r *http.Request) 
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
 
-func (h *handler) HandleDeleteTodoByListId(w http.ResponseWriter, r *http.Request) {}
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get todo by list id %s, error %s", listId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}

@@ -23,8 +23,12 @@ func (*listConverter) ToGQL(list *models.List) *gql.List {
 }
 
 func (l *listConverter) ToListPageGQL(listPage *models.ListPage) *gql.ListPage {
-	if listPage == nil {
-		return nil
+	if listPage == nil || len(listPage.Data) == 0 {
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}
 	}
 
 	lists := listPage.Data

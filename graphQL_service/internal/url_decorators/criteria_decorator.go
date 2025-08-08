@@ -14,11 +14,15 @@ type criteriaDecorator struct {
 }
 
 func NewCriteriaDecorator(inner QueryParamsRetrievers, condition string, conditionValue string) QueryParamsRetrievers {
-	return &criteriaDecorator{inner: inner, condition: condition, conditionValue: conditionValue}
+	return &criteriaDecorator{
+		inner:          inner,
+		condition:      condition,
+		conditionValue: conditionValue,
+	}
 }
 
 func (t *criteriaDecorator) DetermineCorrectQueryParams(ctx context.Context, serverAddress string) (string, error) {
-	log.C(ctx).Debugf("crafting correct query params in todos by criteria retriever")
+	log.C(ctx).Info("crafting correct query params in todos by criteria retriever")
 
 	currentUrl, err := t.inner.DetermineCorrectQueryParams(ctx, serverAddress)
 	if err != nil {

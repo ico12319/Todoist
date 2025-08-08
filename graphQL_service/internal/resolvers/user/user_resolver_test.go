@@ -2,10 +2,11 @@ package user
 
 import (
 	gql "Todo-List/internProject/graphQL_service/graph/model"
-	"Todo-List/internProject/graphQL_service/internal/gql_constants"
+	gql_constants2 "Todo-List/internProject/graphQL_service/internal/gql_constants"
 	"Todo-List/internProject/graphQL_service/internal/resolvers/user/mocks"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
+	"Todo-List/internProject/internal/gql_constants"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -41,7 +42,7 @@ func TestResolver_Users(t *testing.T) {
 				returnedDecorator := url_decorators.NewCriteriaDecorator(baseDecorator, gql_constants.LIMIT, limit)
 
 				mck.EXPECT().
-					CreateUrlDecorator(mock.Anything, gql_constants.USER_PATH, &url_filters.BaseFilters{
+					CreateUrlDecorator(mock.Anything, gql_constants2.USER_PATH, &url_filters.BaseFilters{
 						Limit: &limit,
 					}).
 					Return(returnedDecorator).
@@ -98,7 +99,7 @@ func TestResolver_Users(t *testing.T) {
 				baseDecorator := url_decorators.NewBaseUrl("")
 
 				mck.EXPECT().
-					CreateUrlDecorator(mock.Anything, gql_constants.USER_PATH, &url_filters.BaseFilters{}).
+					CreateUrlDecorator(mock.Anything, gql_constants2.USER_PATH, &url_filters.BaseFilters{}).
 					Return(baseDecorator).
 					Once()
 
@@ -128,7 +129,7 @@ func TestResolver_Users(t *testing.T) {
 				baseDecorator := url_decorators.NewBaseUrl("")
 
 				mck.EXPECT().
-					CreateUrlDecorator(mock.Anything, gql_constants.USER_PATH, &url_filters.BaseFilters{}).
+					CreateUrlDecorator(mock.Anything, gql_constants2.USER_PATH, &url_filters.BaseFilters{}).
 					Return(baseDecorator).
 					Once()
 
@@ -219,7 +220,7 @@ func TestResolver_User(t *testing.T) {
 			httpServiceMock: func() *mocks.HttpService {
 				mck := &mocks.HttpService{}
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				mck.EXPECT().
 					GetHttpResponseWithAuthHeader(mock.Anything, http.MethodGet, mockUrl, nil).
@@ -249,7 +250,7 @@ func TestResolver_User(t *testing.T) {
 
 			httpServiceMock: func() *mocks.HttpService {
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				return getHttpResponseWithStatusInternalServerErrorWhenGettingUser(mockUrl)
 			},
@@ -266,7 +267,7 @@ func TestResolver_User(t *testing.T) {
 				mck := &mocks.HttpService{}
 
 				formattedSuffix := fmt.Sprintf("/%s", userId2)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				resp := &http.Response{
 					StatusCode: http.StatusOK,
@@ -332,7 +333,7 @@ func TestResolver_DeleteUser(t *testing.T) {
 				mck = getHttpResponseWithCorrectUser(t)
 
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				resp := &http.Response{
 					StatusCode: http.StatusNoContent,
@@ -384,7 +385,7 @@ func TestResolver_DeleteUser(t *testing.T) {
 
 			httpServiceMock: func() *mocks.HttpService {
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				return getHttpResponseWithStatusInternalServerErrorWhenGettingUser(mockUrl)
 			},
@@ -404,7 +405,7 @@ func TestResolver_DeleteUser(t *testing.T) {
 				mck = getHttpResponseWithCorrectUser(t)
 
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				resp := &http.Response{
 					StatusCode: http.StatusInternalServerError,
@@ -441,7 +442,7 @@ func TestResolver_DeleteUser(t *testing.T) {
 				mck = getHttpResponseWithCorrectUser(t)
 
 				formattedSuffix := fmt.Sprintf("/%s", userId1)
-				mockUrl := url + gql_constants.USER_PATH + formattedSuffix
+				mockUrl := url + gql_constants2.USER_PATH + formattedSuffix
 
 				mck.EXPECT().
 					GetHttpResponseWithAuthHeader(mock.Anything, http.MethodDelete, mockUrl, nil).
@@ -1004,7 +1005,7 @@ func TestResolver_DeleteUsers(t *testing.T) {
 			testName: "Failed to delete users, http status internal server error status code received",
 
 			httpServiceMock: func() *mocks.HttpService {
-				mockUrl := url + gql_constants.USER_PATH
+				mockUrl := url + gql_constants2.USER_PATH
 
 				return getHttpResponseWithStatusInternalServerErrorWhenGettingUser(mockUrl)
 			},
@@ -1025,7 +1026,7 @@ func TestResolver_DeleteUsers(t *testing.T) {
 				mck := &mocks.HttpService{}
 				mck = getHttpResponseWithCorrectUsers(t)
 
-				mockUrl := url + gql_constants.USER_PATH
+				mockUrl := url + gql_constants2.USER_PATH
 				mck.EXPECT().
 					GetHttpResponseWithAuthHeader(mock.Anything, http.MethodDelete, mockUrl, nil).
 					Return(nil, errWhenTryingToGetHttpResponse).

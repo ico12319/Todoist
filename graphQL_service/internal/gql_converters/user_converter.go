@@ -29,7 +29,11 @@ func (*userConverter) ToGQL(user *models.User) *gql.User {
 
 func (u *userConverter) ToUserPageGQL(userPage *models.UserPage) *gql.UserPage {
 	if userPage == nil {
-		return nil
+		return &gql.UserPage{
+			Data:       make([]*gql.User, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}
 	}
 
 	users := userPage.Data

@@ -2,8 +2,6 @@ package users
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
-	"Todo-List/internProject/todo_app_service/internal/persistence"
-	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
@@ -13,15 +11,18 @@ import (
 
 type userRepo interface {
 	CreateUser(ctx context.Context, user *entities.User) (*entities.User, error)
-	GetUsers(ctx context.Context, retriever sqlQueryRetriever) ([]entities.User, error)
+	GetUsers(ctx context.Context, f *filters.UserFilters) ([]entities.User, error)
 	GetUser(ctx context.Context, userId string) (*entities.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 	UpdateUserPartially(ctx context.Context, params map[string]interface{}, fields []string) (*entities.User, error)
 	UpdateUser(ctx context.Context, userId string, user *entities.User) (*entities.User, error)
 	DeleteUser(ctx context.Context, userId string) error
 	DeleteUsers(ctx context.Context) error
-	GetTodosAssignedToUser(ctx context.Context, userId string, retriever sqlQueryRetriever) ([]entities.Todo, error)
-	GetUserLists(ctx context.Context, retriever sqlQueryRetriever) ([]entities.List, error)
+	GetTodosAssignedToUser(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.Todo, error)
+	GetUserLists(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.List, error)
+	GetUsersPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error)
+	GetUserListsPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error)
+	GetTodosAssignedToUserPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error)
 }
 
 type userConverter interface {
@@ -29,23 +30,19 @@ type userConverter interface {
 	ToEntity(user *models.User) *entities.User
 	ConvertFromUpdateModelToModel(user *handler_models.UpdateUser) *models.User
 	ConvertFromCreateHandlerModelToModel(user *handler_models.CreateUser) *models.User
-	ManyToModel(users []entities.User) *models.UserPage
+	ManyToPage(users []entities.User, paginationInfo *entities.PaginationInfo) *models.UserPage
 }
 
 type uuidGenerator interface {
 	Generate() string
 }
 
-type sqlDecoratorFactory interface {
-	CreateSqlDecorator(ctx context.Context, filters sql_query_decorators.Filters, initialQuery string) (sql_query_decorators.SqlQueryRetriever, error)
-}
-
 type listConverter interface {
-	ManyToModel(lists []entities.List) *models.ListPage
+	ManyToPage(lists []entities.List, paginationInfo *entities.PaginationInfo) *models.ListPage
 }
 
 type todoConverter interface {
-	ManyToModel(todos []entities.Todo) *models.TodoPage
+	ManyToPage(todos []entities.Todo, paginationInfo *entities.PaginationInfo) *models.TodoPage
 }
 type service struct {
 	repo       userRepo
@@ -53,57 +50,34 @@ type service struct {
 	lConverter listConverter
 	tConverter todoConverter
 	uuidGen    uuidGenerator
-	factory    sqlDecoratorFactory
-	transact   persistence.Transactioner
 }
 
-func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator, factory sqlDecoratorFactory, transact persistence.Transactioner) *service {
+func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator) *service {
 	return &service{
 		repo:       repo,
 		converter:  converter,
 		lConverter: lConverter,
 		tConverter: tConverter,
 		uuidGen:    uuidGen,
-		factory:    factory,
-		transact:   transact,
 	}
 }
 
 func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) (*models.UserPage, error) {
 	log.C(ctx).Info("getting users in user service")
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	baseQuery := `WITH sorted_users AS(
- 					SELECT * FROM users ORDER BY id
-				  )
-			     SELECT id, email, role, COUNT(*) OVER() AS total_count FROM sorted_users`
-
-	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilters, baseQuery)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get users, error when calling factory function")
-		return nil, err
-	}
-
-	userEntities, err := s.repo.GetUsers(ctx, decorator)
+	userEntities, err := s.repo.GetUsers(ctx, uFilters)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get users in user service due to an error in user repository %s", err.Error())
 		return nil, err
 	}
 
-	usersPage := s.converter.ManyToModel(userEntities)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to get user records, error %s", err.Error())
+	paginationInfo, err := s.repo.GetUsersPaginationInfo(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get first and last id in user service, error %s", err.Error())
 		return nil, err
 	}
+
+	usersPage := s.converter.ManyToPage(userEntities, paginationInfo)
 
 	return usersPage, nil
 }
@@ -123,56 +97,26 @@ func (s *service) GetUserRecord(ctx context.Context, userId string) (*models.Use
 func (s *service) GetUserRecordByEmail(ctx context.Context, email string) (*models.User, error) {
 	log.C(ctx).Infof("getting user by email %s in user service", email)
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
 	userEntity, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get user by email %s in user service due to an error in user repository", email)
 		return nil, err
 	}
 
-	userModel := s.converter.ToModel(userEntity)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to get user by email %s, error %s", userModel, err.Error())
-		return nil, err
-	}
-
-	return userModel, nil
+	return s.converter.ToModel(userEntity), nil
 }
 
 func (s *service) CreateUserRecord(ctx context.Context, user *handler_models.CreateUser) (*models.User, error) {
 	log.C(ctx).Info("creating user in user service")
-
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
 
 	createModel := s.converter.ConvertFromCreateHandlerModelToModel(user)
 	createModel.Id = s.uuidGen.Generate()
 
 	convertedEntity := s.converter.ToEntity(createModel)
 
-	_, err = s.repo.CreateUser(ctx, convertedEntity)
+	_, err := s.repo.CreateUser(ctx, convertedEntity)
 	if err != nil {
 		log.C(ctx).Errorf("failed to create user in user service, error %s when calling user repo", err.Error())
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to create user, error %s", err.Error())
 		return nil, err
 	}
 
@@ -182,47 +126,18 @@ func (s *service) CreateUserRecord(ctx context.Context, user *handler_models.Cre
 func (s *service) DeleteUserRecord(ctx context.Context, id string) error {
 	log.C(ctx).Infof("deleting user with id %s in user service", id)
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	if err = s.repo.DeleteUser(ctx, id); err != nil {
+	if err := s.repo.DeleteUser(ctx, id); err != nil {
 		log.C(ctx).Errorf("failed to update user in user service, error %s when calling user repo", err.Error())
 		return err
 	}
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to delete user with id %s, error %s", id, err.Error())
-		return err
-	}
-
 	return nil
 }
 
 func (s *service) DeleteUsers(ctx context.Context) error {
 	log.C(ctx).Info("deleting users in user service")
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	if err = s.repo.DeleteUsers(ctx); err != nil {
+	if err := s.repo.DeleteUsers(ctx); err != nil {
 		log.C(ctx).Errorf("failed to delete users, error %s", err.Error())
-		return err
-	}
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to delete users, error %s", err.Error())
 		return err
 	}
 
@@ -232,15 +147,6 @@ func (s *service) DeleteUsers(ctx context.Context) error {
 func (s *service) UpdateUserRecord(ctx context.Context, id string, user *models.User) (*models.User, error) {
 	log.C(ctx).Infof("updating user with id %s in user service", id)
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
 	convertedEntity := s.converter.ToEntity(user)
 
 	updatedEntity, err := s.repo.UpdateUser(ctx, id, convertedEntity)
@@ -249,27 +155,11 @@ func (s *service) UpdateUserRecord(ctx context.Context, id string, user *models.
 		return nil, err
 	}
 
-	updatedModel := s.converter.ToModel(updatedEntity)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to update user with id %s, error %s", id, err.Error())
-		return nil, err
-	}
-
-	return updatedModel, nil
+	return s.converter.ToModel(updatedEntity), nil
 }
 
 func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user *handler_models.UpdateUser) (*models.User, error) {
 	log.C(ctx).Infof("updating user with with id %s in user service", id)
-
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
 
 	convertedModel := s.converter.ConvertFromUpdateModelToModel(user)
 
@@ -284,107 +174,46 @@ func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user
 		return nil, err
 	}
 
-	updatedModel := s.converter.ToModel(updatedEntity)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to update user with id %s partially, error %s", id, err.Error())
-		return nil, err
-	}
-
-	return updatedModel, nil
+	return s.converter.ToModel(updatedEntity), nil
 }
 
 func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) (*models.ListPage, error) {
 	log.C(ctx).Info("getting lists where user participates in user service")
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	if _, err = s.repo.GetUser(ctx, userId); err != nil {
-		log.C(ctx).Errorf("failed to get user lists, error %s when calling user repo", err.Error())
-		return nil, err
-	}
-
-	baseQuery := `WITH sorted_lists_and_users AS(
-				   SELECT * FROM lists LEFT JOIN user_lists ON
-  				   lists.id = user_lists.list_id ORDER BY lists.id;
-  				  )
- 				SELECT id, name, created_at, last_updated, owner, description, COUNT(*) OVER() AS total_count 
-FROM sorted_lists_and_users`
-
-	decorator, err := s.factory.CreateSqlDecorator(ctx, uFilter, baseQuery)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get lists where user participates in, error when calling factory function")
-		return nil, err
-	}
-
-	listEntities, err := s.repo.GetUserLists(ctx, decorator)
+	listEntities, err := s.repo.GetUserLists(ctx, userId, uFilter)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error %s when calling user repo function", err.Error())
 		return nil, err
 	}
 
-	listModels := s.lConverter.ManyToModel(listEntities)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to get user lists, error %s", err.Error())
+	paginationInfo, err := s.repo.GetUserListsPaginationInfo(ctx, userId)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get first and last ids in user service, error %s", err.Error())
 		return nil, err
 	}
 
-	return listModels, nil
+	return s.lConverter.ManyToPage(listEntities, paginationInfo), nil
 }
 
 func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) (*models.TodoPage, error) {
 	log.C(ctx).Info("getting todos assigned to user in user service")
 
-	tx, err := s.transact.BeginContext(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to begin transactin in user service, error %s", err.Error())
-		return nil, err
-	}
-	defer s.transact.RollbackUnlessCommitted(ctx, tx)
-
-	ctx = persistence.SaveToContext(ctx, tx)
-
-	if _, err = s.repo.GetUser(ctx, userId); err != nil {
+	if _, err := s.repo.GetUser(ctx, userId); err != nil {
 		log.C(ctx).Errorf("failed to get todos assigned to user, error %s when calling user repo", err.Error())
 		return nil, err
 	}
 
-	baseQuery := `WITH sorted_todo_cte AS ( 
-				   SELECT todos.id, todos.name, todos.description, todos.list_id,
-				   todos.status,todos.created_at, todos.last_updated, todos.assigned_to,
-		           todos.due_date, todos.priority, users.id AS user_id FROM todos
-				   JOIN users ON todos.assigned_to = users.id ORDER BY todos.id
- 			      )
-				SELECT id, name, description, list_id, status, created_at,
-				last_updated, assigned_to, due_date, priority, COUNT(*) OVER() AS total_count
-FROM sorted_todo_cte WHERE user_id = $1`
-
-	decorator, err := s.factory.CreateSqlDecorator(ctx, userFilters, baseQuery)
-	if err != nil {
-		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling factory function")
-		return nil, err
-	}
-
-	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, userId, decorator)
+	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, userId, userFilters)
 	if err != nil {
 		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling repo")
 		return nil, err
 	}
 
-	todoModels := s.tConverter.ManyToModel(todoEntities)
-
-	if err = tx.Commit(); err != nil {
-		log.C(ctx).Errorf("failed to commit transaction when trying to get todos assigned to user with id %s, error %s", userId, err.Error())
+	paginationInfo, err := s.repo.GetTodosAssignedToUserPaginationInfo(ctx, userId)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get first and last ids in user service, error %s", err.Error())
 		return nil, err
 	}
 
-	return todoModels, nil
+	return s.tConverter.ManyToPage(todoEntities, paginationInfo), nil
 }

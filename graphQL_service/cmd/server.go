@@ -14,6 +14,7 @@ import (
 	"Todo-List/internProject/graphQL_service/internal/resolvers/user"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators"
 	_ "Todo-List/internProject/graphQL_service/internal/url_decorators/url_decorators_creators"
+	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/http_helpers"
 	"Todo-List/internProject/todo_app_service/pkg/jwt"
 	"context"
@@ -21,8 +22,6 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
-
-	"Todo-List/internProject/todo_app_service/pkg/configuration"
 	"github.com/gorilla/mux"
 	"github.com/vektah/gqlparser/v2/ast"
 	"net/http"
@@ -89,9 +88,8 @@ func main() {
 	r.HandleFunc("/api/readyz", restHealthHandler.HandleCheckingRestReadyz).Methods(http.MethodGet)
 
 	mainGql := r.PathPrefix("/query").Subrouter()
-	mainGql.Handle("", srv).Methods(http.MethodPost, http.MethodOptions)
+	mainGql.Handle("", srv).Methods(http.MethodPost, http.MethodOptions, http.MethodGet, http.MethodOptions)
 	mainGql.Use(gql_middlewares.ContentTypeMiddlewareFunc(),
-		gql_middlewares.CookieExtractMiddlewareFunc(),
 		gql_middlewares.NewJwtPopulateMiddleware(),
 		gql_middlewares.CorsMiddlewareFunc(configManager.CorsConfig.FrontendUrl))
 

@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/jwt"
@@ -26,10 +27,16 @@ type authorisationMiddleware struct {
 	next        http.Handler
 	service     UserService
 	tokenParser jwtParser
+	transact    persistence.Transactioner
 }
 
-func newAuthorisationMiddleware(next http.Handler, service UserService, tokenParser jwtParser) *authorisationMiddleware {
-	return &authorisationMiddleware{next: next, service: service, tokenParser: tokenParser}
+func newAuthorisationMiddleware(next http.Handler, service UserService, tokenParser jwtParser, transact persistence.Transactioner) *authorisationMiddleware {
+	return &authorisationMiddleware{
+		next:        next,
+		service:     service,
+		tokenParser: tokenParser,
+		transact:    transact,
+	}
 }
 
 func (a *authorisationMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -43,9 +50,25 @@ func (a *authorisationMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	tx, err := a.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to open transaction in auth middleware, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer a.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	user, err := a.service.GetUserRecordByEmail(ctx, jwtClaims.Email)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get user by email, internal server error... %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction in auth middleware, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -54,8 +77,8 @@ func (a *authorisationMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	a.next.ServeHTTP(w, r.WithContext(ctx))
 }
 
-func AuthorisationMiddlewareFunc(service UserService, tokenParser jwtParser) mux.MiddlewareFunc {
+func AuthorisationMiddlewareFunc(service UserService, tokenParser jwtParser, transact persistence.Transactioner) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
-		return newAuthorisationMiddleware(next, service, tokenParser)
+		return newAuthorisationMiddleware(next, service, tokenParser, transact)
 	}
 }

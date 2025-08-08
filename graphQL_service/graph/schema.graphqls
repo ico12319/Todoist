@@ -40,8 +40,8 @@ type User{
   id: ID!
   email: String!
   role: UserRole @hasRole
-  assignedTo(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
-  participateIn(filter: UserRoleFilter, limit: Int = 100, after: ID): ListPage!
+  assignedTo(first: Int, after: ID, last: Int, before: ID,filter: TodosFilterInput): TodoPage!
+  participateIn(first: Int, after: ID, last: Int, before: ID): ListPage!
 }
 
 type Todo{
@@ -64,8 +64,8 @@ type List{
   created_at: Time!
   last_updated: Time!
   owner: User!
-  todos(filter: TodosFilterInput, limit: Int = 100, after: ID): TodoPage!
-  collaborators(limit: Int = 100, after: ID): UserPage!
+  todos(first: Int, after: ID, last: Int, before: ID, filter: TodosFilterInput): TodoPage!
+  collaborators(first: Int, after: ID, last: Int, before: ID): UserPage!
 }
 
 type RandomActivity{
@@ -194,13 +194,13 @@ input RefreshTokenInput{
 }
 
 type Query{
-  lists(limit: Int = 100, after: ID): ListPage!
+  lists(first: Int, after: ID, last: Int, before: ID): ListPage!
   list(id: ID!): List
 
-  todos(limit: Int = 100, after: ID, criteria: TodosFilterInput): TodoPage!
+  todos(first: Int, after: ID, last: Int, before: ID, criteria: TodosFilterInput): TodoPage!
   todo(id: ID!): Todo
 
-  users(limit: Int = 100, after: ID): UserPage!
+  users(first: Int, after: ID, last: Int, before: ID): UserPage!
   user(id: ID!): User
 
   randomActivity: RandomActivity!

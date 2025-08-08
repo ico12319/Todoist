@@ -42,7 +42,7 @@ type uResolver interface {
 	DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPayload, error)
 	DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, error)
 	AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.TodoFilters) (*gql.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.UserFilters) (*gql.ListPage, error)
+	ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error)
 }
 
 type aResolver interface {

@@ -3,6 +3,7 @@ package lists
 import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -35,22 +36,45 @@ type fieldValidator interface {
 type handler struct {
 	serv       listService
 	fValidator fieldValidator
+	transact   persistence.Transactioner
 }
 
-func NewHandler(service listService, fValidator fieldValidator) *handler {
-	return &handler{serv: service, fValidator: fValidator}
+func NewHandler(service listService, fValidator fieldValidator, transact persistence.Transactioner) *handler {
+	return &handler{
+		serv:       service,
+		fValidator: fValidator,
+		transact:   transact,
+	}
 }
 
 func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting lists from list handler")
 
-	limit := utils.GetLimitFromUrl(r)
-	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	first := utils.GetContentFromUrl(r, constants.FIRST)
+	after := utils.GetContentFromUrl(r, constants.AFTER)
+	before := utils.GetContentFromUrl(r, constants.BEFORE)
+	last := utils.GetContentFromUrl(r, constants.LAST)
+
+	if len(first) == 0 && len(last) == 0 {
+		first = constants.DEFAULT_LIMIT_VALUE
+	}
 
 	lFilter := &filters.BaseFilters{
-		Limit:  limit,
-		Cursor: cursor,
+		First:  first,
+		Last:   last,
+		After:  after,
+		Before: before,
 	}
 
 	lists, err := h.serv.GetListsRecords(ctx, lFilter)
@@ -60,9 +84,14 @@ func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(lists); err != nil {
 		log.C(ctx).Errorf("failed to get lists in list handler due to an error %s when trying to encode JSON", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction when trying to get lists in list handler, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -72,6 +101,16 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	log.C(ctx).Info("getting list's collaborators in list handler")
 
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list_id from the context in list handler %s", err.Error())
@@ -79,12 +118,20 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	limit := utils.GetLimitFromUrl(r)
-	cursor := utils.GetContentFromUrl(r, constants.CURSOR)
+	first := utils.GetContentFromUrl(r, constants.FIRST)
+	after := utils.GetContentFromUrl(r, constants.AFTER)
+	before := utils.GetContentFromUrl(r, constants.BEFORE)
+	last := utils.GetContentFromUrl(r, constants.LAST)
+
+	if len(first) == 0 && len(last) == 0 {
+		first = constants.DEFAULT_LIMIT_VALUE
+	}
 
 	lFilters := &filters.BaseFilters{
-		Limit:  limit,
-		Cursor: cursor,
+		First:  first,
+		Last:   last,
+		Before: before,
+		After:  after,
 	}
 
 	collaborators, err := h.serv.GetCollaborators(ctx, listId, lFilters)
@@ -95,9 +142,14 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(collaborators); err != nil {
 		log.C(ctx).Error("failed to get list's collaborators due to an error when trying to encode JSON in list handler")
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to get collaborators, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -106,6 +158,16 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 func (h *handler) HandleDeleteList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting list in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
@@ -119,6 +181,12 @@ func (h *handler) HandleDeleteList(w http.ResponseWriter, r *http.Request) {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete list with id %s, error %s", listId, err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -126,9 +194,25 @@ func (h *handler) HandleDeleteLists(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting lists in list handler")
 
-	if err := h.serv.DeleteLists(ctx); err != nil {
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
+	if err = h.serv.DeleteLists(ctx); err != nil {
 		log.C(ctx).Errorf("failed to delete lists, error %s when calling list service", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -137,8 +221,18 @@ func (h *handler) HandleCreateList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("creating list in list handler")
 
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
+
 	var list handler_models.CreateList
-	if err := json.NewDecoder(r.Body).Decode(&list); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&list); err != nil {
 		log.C(ctx).Errorf("failed to decode list handler model %s", err.Error())
 		utils.EncodeError(w, constants.INVALID_REQUEST_BODY, http.StatusBadRequest)
 		return
@@ -166,15 +260,31 @@ func (h *handler) HandleCreateList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(l); err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 func (h *handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("changing list name in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
@@ -206,18 +316,34 @@ func (h *handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(&updatedModel); err != nil {
 		log.C(ctx).Errorf("failed to encode JSON %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+
 }
 
 func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("adding a collaborator in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
@@ -241,16 +367,32 @@ func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(modelUser); err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting collaborator in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](ctx, middlewares.ListId)
 	if err != nil {
@@ -273,12 +415,27 @@ func (h *handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting list record in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
@@ -295,8 +452,13 @@ func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(list); err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -305,6 +467,16 @@ func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 func (h *handler) HandleGetListOwner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting list owner in list handler")
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in list handler, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	listId, err := utils.GetValueFromContext[string](r.Context(), middlewares.ListId)
 	if err != nil {
@@ -321,8 +493,13 @@ func (h *handler) HandleGetListOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(listOwner); err != nil {
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit trasnaction when trying to delete lists, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

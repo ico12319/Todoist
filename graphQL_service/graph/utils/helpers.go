@@ -28,7 +28,7 @@ func HandleHttpCode(statusCode int) error {
 	} else if statusCode == http.StatusUnauthorized {
 		return &gqlerror.Error{
 			Message:    "Unauthorized user",
-			Extensions: map[string]interface{}{"code": "Unauthorized"},
+			Extensions: map[string]interface{}{"code": "UNAUTHORIZED"},
 		}
 	}
 

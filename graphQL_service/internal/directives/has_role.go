@@ -44,6 +44,6 @@ func (i *roleDirective) HasRole(ctx context.Context, obj interface{}, next graph
 		log.C(ctx).Debugf("only admins can see user's roles, actual role %s", claims.Role)
 		return nil, nil
 	}
-
+	log.C(ctx).Info("sq tochno li e")
 	return next(ctx)
 }

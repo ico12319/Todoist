@@ -73,6 +73,7 @@ func (r *resolver) Users(ctx context.Context, filters *url_filters.BaseFilters) 
 		return nil, err
 	}
 
+	log.C(ctx).Infof("url is %s", url)
 	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
@@ -205,7 +206,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, filters *url_f
 	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
-func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.UserFilters) (*gql.ListPage, error) {
+func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error) {
 	log.C(ctx).Infof("getting lists shared with user with id %s", obj.ID)
 
 	formattedSuffix := fmt.Sprintf("/%s", obj.ID)
@@ -215,30 +216,50 @@ func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *ur
 	url, err := decorator.DetermineCorrectQueryParams(ctx, r.restUrl)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists shared with user with id %s, error when trying to build url", obj.ID)
-		return nil, err
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}, err
 	}
 
 	resp, err := r.httpService.GetHttpResponseWithAuthHeader(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get http response in user resolver, error %s", err.Error())
-		return nil, err
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
 		log.C(ctx).Warn("http status code not found when trying to see in which lists user participates...")
-		return nil, nil
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}, nil
 	}
 
 	if err = utils.HandleHttpCode(resp.StatusCode); err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates, error %s", err.Error())
-		return nil, err
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}, err
 	}
 
 	var listPage models.ListPage
 	if err = json.NewDecoder(resp.Body).Decode(&listPage); err != nil {
 		log.C(ctx).Errorf("failed to get lists shared with user with id %s, error when trying to decode JSON", obj.ID)
-		return nil, err
+		return &gql.ListPage{
+			Data:       make([]*gql.List, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}, err
 	}
 
 	return r.lConverter.ToListPageGQL(&listPage), nil

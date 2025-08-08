@@ -24,7 +24,7 @@ func (a *criteriaDecorator) DetermineCorrectSqlQuery(ctx context.Context) string
 
 	addition := determineAddition(currentQuery)
 
-	formattedSuffix := fmt.Sprintf(" %s %s = '%s'", addition, a.condition, a.conditionValue)
+	formattedSuffix := fmt.Sprintf(" %s %s = %s", addition, a.condition, a.conditionValue)
 	currentQuery += formattedSuffix
 
 	return currentQuery

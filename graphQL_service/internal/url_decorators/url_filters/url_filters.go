@@ -8,14 +8,18 @@ import (
 )
 
 type BaseFilters struct {
-	Limit  *string
-	Cursor *string
+	First  *string
+	After  *string
+	Last   *string
+	Before *string
 }
 
 func (b *BaseFilters) GetFilters() map[string]*string {
 	return map[string]*string{
-		gql_constants.LIMIT:  b.Limit,
-		gql_constants.CURSOR: b.Cursor,
+		gql_constants.FIRST:  b.First,
+		gql_constants.AFTER:  b.After,
+		gql_constants.LAST:   b.Last,
+		gql_constants.BEFORE: b.Before,
 	}
 }
 
@@ -29,8 +33,10 @@ func (t *TodoFilters) GetFilters() map[string]*string {
 	todoType := extractType(t.TodoFilters)
 
 	return map[string]*string{
-		gql_constants.LIMIT:    t.BaseFilters.Limit,
-		gql_constants.CURSOR:   t.BaseFilters.Cursor,
+		gql_constants.FIRST:    t.First,
+		gql_constants.AFTER:    t.After,
+		gql_constants.LAST:     t.Last,
+		gql_constants.BEFORE:   t.Before,
 		gql_constants.PRIORITY: pr,
 		gql_constants.STATUS:   st,
 		gql_constants.TYPE:     todoType,
@@ -46,8 +52,10 @@ func (u *UserFilters) GetFilters() map[string]*string {
 	role := extractUserRole(u.UserFilters)
 
 	return map[string]*string{
-		gql_constants.LIMIT:  u.BaseFilters.Limit,
-		gql_constants.CURSOR: u.BaseFilters.Cursor,
+		gql_constants.FIRST:  u.First,
+		gql_constants.AFTER:  u.After,
+		gql_constants.LAST:   u.Last,
+		gql_constants.BEFORE: u.Before,
 		gql_constants.ROLE:   role,
 	}
 }

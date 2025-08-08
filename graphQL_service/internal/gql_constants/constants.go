@@ -30,16 +30,22 @@ const (
 )
 
 const (
-	CURSOR   = "cursor"
-	LIMIT    = "limit"
+	AFTER    = "after"
+	FIRST    = "first"
 	STATUS   = "status"
 	PRIORITY = "priority"
 	TYPE     = "overdue"
 	ROLE     = "role"
+	BEFORE   = "before"
+	LAST     = "last"
 )
 
 const (
 	API_ENDPOINT    = "/api"
 	HEALTH_ENDPOINT = "/healthz"
 	READY_ENDPOINT  = "/readyz"
+)
+
+const (
+	DEFAULT_LIMIT_VALUE = "100"
 )

@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -25,10 +26,16 @@ type todoModifyMiddleware struct {
 	next        http.Handler
 	todoService tService
 	lService    lService
+	transact    persistence.Transactioner
 }
 
-func newTodoModifyMiddleware(next http.Handler, service tService, lService lService) *todoModifyMiddleware {
-	return &todoModifyMiddleware{next: next, todoService: service, lService: lService}
+func newTodoModifyMiddleware(next http.Handler, service tService, lService lService, transact persistence.Transactioner) *todoModifyMiddleware {
+	return &todoModifyMiddleware{
+		next:        next,
+		todoService: service,
+		lService:    lService,
+		transact:    transact,
+	}
 }
 
 func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +51,16 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		utils.EncodeError(w, "missing user in context", http.StatusBadRequest)
 		return
 	}
+
+	tx, err := t.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in todo modify middleware, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer t.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	todo, err := t.todoService.GetTodoRecord(ctx, todoId)
 	if err != nil {
@@ -69,7 +86,7 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	assignee, err := t.todoService.GetTodoAssigneeToRecord(r.Context(), todoId)
+	assignee, err := t.todoService.GetTodoAssigneeToRecord(ctx, todoId)
 	if err != nil {
 		log.C(ctx).Errorf("faield to serve http, error %s when trying to get todo assingee", err.Error())
 
@@ -85,12 +102,19 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		)
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction in todo modify middleware, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	t.next.ServeHTTP(w, r)
 }
 
-func NewTodoModifyMiddlewareFunc(todoService tService, listService lService) mux.MiddlewareFunc {
+func NewTodoModifyMiddlewareFunc(todoService tService, listService lService, transact persistence.Transactioner) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
-		return newTodoModifyMiddleware(next, todoService, listService)
+		return newTodoModifyMiddleware(next, todoService, listService, transact)
 	}
 }
 

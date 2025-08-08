@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
@@ -32,20 +33,32 @@ type handler struct {
 	service     oauthService
 	issuer      jwtIssuer
 	httpService httpService
+	transact    persistence.Transactioner
 	frontendUrl string
 }
 
-func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService, frontendUrl string) *handler {
+func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService, transact persistence.Transactioner, frontendUrl string) *handler {
 	return &handler{
 		service:     service,
 		issuer:      issuer,
 		httpService: httpService,
 		frontendUrl: frontendUrl,
+		transact:    transact,
 	}
 }
 
 func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in oaut handler when handling callback, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	url, state, err := h.service.LoginUrl(ctx)
 	if err != nil {
@@ -68,8 +81,18 @@ func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+
+	tx, err := h.transact.BeginContext(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to begin transaction in oaut handler when handling callback, error %s", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer h.transact.RollbackUnlessCommitted(ctx, tx)
+
+	ctx = persistence.SaveToContext(ctx, tx)
 
 	authCode := r.URL.Query().Get("code")
 	if len(authCode) == 0 {
@@ -105,6 +128,12 @@ func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		Path:   "/",
 		MaxAge: constants.HTTP_COOKIES_MAX_AGE,
 	})
+
+	if err = tx.Commit(); err != nil {
+		log.C(ctx).Errorf("failed to commit transaction in oauth handler, error %s when trying to handle callback", err.Error())
+		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	url := fmt.Sprintf("%s/index.html", h.frontendUrl)
 	h.httpService.Redirect(w, r, url, http.StatusTemporaryRedirect)

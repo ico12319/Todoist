@@ -22,7 +22,7 @@ func NewBaseQuery(initialQuery string) SqlQueryRetriever {
 }
 
 func (b *baseQuery) DetermineCorrectSqlQuery(ctx context.Context) string {
-	log.C(ctx).Info("getting todos in all todos retriever")
+	log.C(ctx).Info("determining correct sql query in base query")
 
 	return b.initialQuery
 }

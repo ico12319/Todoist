@@ -36,22 +36,38 @@ func (*listConverter) ToEntity(list *models.List) *entities.List {
 	}
 }
 
-func (l *listConverter) ManyToModel(lists []entities.List) *models.ListPage {
-	modelsLists := make([]*models.List, 0, len(lists))
+func (l *listConverter) ManyToPage(lists []entities.List, pageInfo *entities.PaginationInfo) *models.ListPage {
+	if len(lists) == 0 || pageInfo == nil || !pageInfo.FirstID.Valid || !pageInfo.LastID.Valid {
+		return &models.ListPage{
+			Data: make([]*models.List, 0),
+			PageInfo: &pagination.Page{
+				HasNextPage: false,
+				HasPrevPage: false,
+			},
+			TotalCount: 0,
+		}
+	}
 
+	modelsLists := make([]*models.List, 0, len(lists))
 	for _, entity := range lists {
 		model := l.ToModel(&entity)
 		modelsLists = append(modelsLists, model)
 	}
 
+	startCursor := modelsLists[0].Id
+	endCursor := modelsLists[len(modelsLists)-1].Id
+
+	lastEntityID := pageInfo.LastID.UUID.String()
+	firstEntityID := pageInfo.FirstID.UUID.String()
+
 	return &models.ListPage{
 		Data:       modelsLists,
-		TotalCount: lists[0].TotalCount,
+		TotalCount: pageInfo.TotalCount,
 		PageInfo: &pagination.Page{
-			StartCursor: modelsLists[0].Id,
-			EndCursor:   modelsLists[len(modelsLists)-1].Id,
-			HasNextPage: lists[0].TotalCount > len(lists),
-			HasPrevPage: false,
+			StartCursor: startCursor,
+			EndCursor:   endCursor,
+			HasNextPage: lastEntityID != endCursor,
+			HasPrevPage: firstEntityID != startCursor,
 		},
 	}
 }

@@ -37,7 +37,6 @@ func (h *handler) HandleSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(randomActivity); err != nil {
 		log.C(ctx).Errorf("failed to encode random activity, error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)

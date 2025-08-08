@@ -18,7 +18,11 @@ type limitDecoratorCreator struct{}
 func (*limitDecoratorCreator) Create(ctx context.Context, inner sql_query_decorators.SqlQueryRetriever, f sql_query_decorators.Filters) (sql_query_decorators.SqlQueryRetriever, error) {
 	log.C(ctx).Info("creating limit decorator in limit decorator creator")
 
-	limit, containsLimit := f.GetFilters()[constants.LIMIT]
+	limit, containsLimit := f.GetFilters()[constants.FIRST]
+	if !containsLimit || len(limit) == 0 {
+		limit, containsLimit = f.GetFilters()[constants.LAST]
+	}
+
 	if containsLimit && len(limit) != 0 {
 		parsedLimit, err := strconv.Atoi(limit)
 		if err != nil {

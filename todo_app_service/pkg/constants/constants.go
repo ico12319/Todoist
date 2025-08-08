@@ -40,10 +40,15 @@ const MISSING_USER_ID = "internal error: missing user_id"
 
 const STATUS = "status"
 const PRIORITY = "priority"
+const AFTER = "after"
+const FIRST = "first"
+const EMAIL = "email"
+const NAME = "name"
+const ID = "id"
+const LAST = "last"
+const BEFORE = "before"
+const ORDER_BY = "order by"
 const LIMIT = "limit"
-const CURSOR = "cursor"
-const LIST_ID = "list_id"
-const USER_ID = "user_id"
 
 const LIST_TARGET = "list"
 const USER_TARGET = "user"
@@ -70,6 +75,11 @@ const DEFAULT_PRIORITY = 10
 const CURSOR_PRIORITY = 15
 
 const LIMIT_PRIORITY = 20
+
+const ORDER_BY_PRIORITY = 18
+
+const ASC_ORDER = "ASC"
+const DESC_ORDER = "DESC"
 
 const OWNER_ROLE = "owner"
 const PARTICIPANT_ROLE = "participant"

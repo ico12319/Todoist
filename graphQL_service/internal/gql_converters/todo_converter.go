@@ -38,7 +38,11 @@ func (*todoConverter) ToGQL(todo *models.Todo) *gql.Todo {
 
 func (t *todoConverter) ToTodoPageGQL(todoPage *models.TodoPage) *gql.TodoPage {
 	if todoPage == nil {
-		return nil
+		return &gql.TodoPage{
+			Data:       make([]*gql.Todo, 0),
+			PageInfo:   nil,
+			TotalCount: 0,
+		}
 	}
 
 	todos := todoPage.Data

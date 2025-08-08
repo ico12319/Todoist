@@ -16,7 +16,7 @@ func determineAddition(baseQuery string) string {
 func determineUserListsAddition(query string) string {
 	var addition string
 
-	if strings.Contains(query, "WHERE") {
+	if strings.Contains(query, "AND") {
 		addition = "OR"
 	} else {
 		addition = "WHERE"

@@ -6,9 +6,8 @@ package graph
 
 import (
 	gql "Todo-List/internProject/graphQL_service/graph/model"
-	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
+	"Todo-List/internProject/graphQL_service/internal/helpers"
 	"context"
-	"strconv"
 )
 
 // Owner is the resolver for the owner field.
@@ -17,29 +16,15 @@ func (r *listResolver) Owner(ctx context.Context, obj *gql.List) (*gql.User, err
 }
 
 // Todos is the resolver for the todos field.
-func (r *listResolver) Todos(ctx context.Context, obj *gql.List, filter *gql.TodosFilterInput, limit *int32, after *string) (*gql.TodoPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.TodoFilters{
-		BaseFilters: url_filters.BaseFilters{
-			Limit:  &parsedLimit,
-			Cursor: after,
-		},
-		TodoFilters: filter,
-	}
-
-	return r.lResolver.Todos(ctx, obj, filters)
+func (r *listResolver) Todos(ctx context.Context, obj *gql.List, first *int32, after *string, last *int32, before *string, filter *gql.TodosFilterInput) (*gql.TodoPage, error) {
+	todoFilters := helpers.InitTodoFilters(first, after, last, before, filter)
+	return r.lResolver.Todos(ctx, obj, todoFilters)
 }
 
 // Collaborators is the resolver for the collaborators field.
-func (r *listResolver) Collaborators(ctx context.Context, obj *gql.List, limit *int32, after *string) (*gql.UserPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.BaseFilters{
-		Limit:  &parsedLimit,
-		Cursor: after,
-	}
-	return r.lResolver.Collaborators(ctx, obj, filters)
+func (r *listResolver) Collaborators(ctx context.Context, obj *gql.List, first *int32, after *string, last *int32, before *string) (*gql.UserPage, error) {
+	basedFilters := helpers.InitBaseFilters(first, after, last, before)
+	return r.lResolver.Collaborators(ctx, obj, basedFilters)
 }
 
 // CreateList is the resolver for the createList field.
@@ -113,14 +98,9 @@ func (r *mutationResolver) ExchangeRefreshToken(ctx context.Context, input gql.R
 }
 
 // Lists is the resolver for the lists field.
-func (r *queryResolver) Lists(ctx context.Context, limit *int32, after *string) (*gql.ListPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.BaseFilters{
-		Limit:  &parsedLimit,
-		Cursor: after,
-	}
-	return r.lResolver.Lists(ctx, filters)
+func (r *queryResolver) Lists(ctx context.Context, first *int32, after *string, last *int32, before *string) (*gql.ListPage, error) {
+	baseFilters := helpers.InitBaseFilters(first, after, last, before)
+	return r.lResolver.Lists(ctx, baseFilters)
 }
 
 // List is the resolver for the list field.
@@ -129,18 +109,9 @@ func (r *queryResolver) List(ctx context.Context, id string) (*gql.List, error) 
 }
 
 // Todos is the resolver for the todos field.
-func (r *queryResolver) Todos(ctx context.Context, limit *int32, after *string, criteria *gql.TodosFilterInput) (*gql.TodoPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.TodoFilters{
-		BaseFilters: url_filters.BaseFilters{
-			Limit:  &parsedLimit,
-			Cursor: after,
-		},
-		TodoFilters: criteria,
-	}
-
-	return r.tResolver.Todos(ctx, filters)
+func (r *queryResolver) Todos(ctx context.Context, first *int32, after *string, last *int32, before *string, criteria *gql.TodosFilterInput) (*gql.TodoPage, error) {
+	todoFilters := helpers.InitTodoFilters(first, after, last, before, criteria)
+	return r.tResolver.Todos(ctx, todoFilters)
 }
 
 // Todo is the resolver for the todo field.
@@ -149,14 +120,9 @@ func (r *queryResolver) Todo(ctx context.Context, id string) (*gql.Todo, error) 
 }
 
 // Users is the resolver for the users field.
-func (r *queryResolver) Users(ctx context.Context, limit *int32, after *string) (*gql.UserPage, error) {
-	parsedLimit := strconv.Itoa(int(*limit))
-
-	filters := &url_filters.BaseFilters{
-		Limit:  &parsedLimit,
-		Cursor: after,
-	}
-	return r.uResolver.Users(ctx, filters)
+func (r *queryResolver) Users(ctx context.Context, first *int32, after *string, last *int32, before *string) (*gql.UserPage, error) {
+	baseFilters := helpers.InitBaseFilters(first, after, last, before)
+	return r.uResolver.Users(ctx, baseFilters)
 }
 
 // User is the resolver for the user field.
@@ -174,6 +140,23 @@ func (r *todoResolver) List(ctx context.Context, obj *gql.Todo) (*gql.List, erro
 	return r.tResolver.List(ctx, obj)
 }
 
+// AssignedTo is the resolver for the assignedTo field.
+func (r *todoResolver) AssignedTo(ctx context.Context, obj *gql.Todo) (*gql.User, error) {
+	return r.tResolver.AssignedTo(ctx, obj)
+}
+
+// AssignedTo is the resolver for the assignedTo field.
+func (r *userResolver) AssignedTo(ctx context.Context, obj *gql.User, first *int32, after *string, last *int32, before *string, filter *gql.TodosFilterInput) (*gql.TodoPage, error) {
+	todoFilters := helpers.InitTodoFilters(first, after, last, before, filter)
+	return r.uResolver.AssignedTo(ctx, obj, todoFilters)
+}
+
+// ParticipateIn is the resolver for the participateIn field.
+func (r *userResolver) ParticipateIn(ctx context.Context, obj *gql.User, first *int32, after *string, last *int32, before *string) (*gql.ListPage, error) {
+	baseFilters := helpers.InitBaseFilters(first, after, last, before)
+	return r.uResolver.ParticipateIn(ctx, obj, baseFilters)
+}
+
 // List returns ListResolver implementation.
 func (r *Resolver) List() ListResolver { return &listResolver{r} }
 
@@ -186,7 +169,11 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 // Todo returns TodoResolver implementation.
 func (r *Resolver) Todo() TodoResolver { return &todoResolver{r} }
 
+// User returns UserResolver implementation.
+func (r *Resolver) User() UserResolver { return &userResolver{r} }
+
 type listResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type todoResolver struct{ *Resolver }
+type userResolver struct{ *Resolver }

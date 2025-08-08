@@ -127,7 +127,7 @@ func determineTokenExpirationTimeBasedOnUserRole(generator timeGenerator, user *
 	if user.Role == constants.Admin {
 		expirationTime = generator.Now().Add(24 * time.Hour)
 	} else {
-		expirationTime = generator.Now().Add(30 * time.Minute)
+		expirationTime = generator.Now().Add(15 * time.Minute)
 	}
 
 	return expirationTime

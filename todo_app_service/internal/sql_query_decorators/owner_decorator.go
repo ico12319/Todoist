@@ -22,9 +22,8 @@ func (o *ownerDecorator) DetermineCorrectSqlQuery(ctx context.Context) string {
 	log.C(ctx).Info("determining correct sql query in owner decorator")
 
 	currentQuery := o.inner.DetermineCorrectSqlQuery(ctx)
-	addition := determineUserListsAddition(currentQuery)
 
-	formattedSuffix := fmt.Sprintf(" %s owner = '%s'", addition, o.ownerId)
+	formattedSuffix := fmt.Sprintf(" AND owner = '%s'", o.ownerId)
 
 	currentQuery += formattedSuffix
 
