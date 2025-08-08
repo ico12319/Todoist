@@ -420,65 +420,88 @@ sap.ui.define(
         });
       },
 
-     onInfoPress: async function (oEvent) {
-  const oButton = oEvent.getSource();
-  const oCtx = oButton.getBindingContext("todos");
-  if (!oCtx) { MessageToast.show("No row context"); return; }
-  const todoId = oCtx.getProperty("id");
+      onInfoPress: async function (oEvent) {
+        const oButton = oEvent.getSource();
+        const oCtx = oButton.getBindingContext("todos");
+        if (!oCtx) {
+          MessageToast.show("No row context");
+          return;
+        }
+        const todoId = oCtx.getProperty("id");
 
-  if (!this._oInfoPopover) {
-    this._oInfoPopover = new Popover({
-      placement: sap.m.PlacementType.Bottom,
-      showHeader: false,
-      contentWidth: "280px",
-      content: new VBox({
-        renderType: "Bare",
-        items: [
-          new HBox({ items: [ new Label({ text: "Created:", width: "7rem" }), new Text({ text: "{/createdAt}" }) ] }),
-          new HBox({ items: [ new Label({ text: "Updated:", width: "7rem" }), new Text({ text: "{/lastUpdated}" }) ] }),
-          new HBox({ items: [ new Label({ text: "Assignee:", width: "7rem" }), new Text({ text: "{/assignedTo}" }) ] })
-        ]
-      })
-    });
-    this.getView().addDependent(this._oInfoPopover);
-  }
+        if (!this._oInfoPopover) {
+          this._oInfoPopover = new Popover({
+            placement: sap.m.PlacementType.Bottom,
+            showHeader: false,
+            contentWidth: "280px",
+            content: new VBox({
+              renderType: "Bare",
+              items: [
+                new HBox({
+                  items: [
+                    new Label({ text: "Created:", width: "7rem" }),
+                    new Text({ text: "{/createdAt}" }),
+                  ],
+                }),
+                new HBox({
+                  items: [
+                    new Label({ text: "Updated:", width: "7rem" }),
+                    new Text({ text: "{/lastUpdated}" }),
+                  ],
+                }),
+                new HBox({
+                  items: [
+                    new Label({ text: "Assignee:", width: "7rem" }),
+                    new Text({ text: "{/assignedTo}" }),
+                  ],
+                }),
+              ],
+            }),
+          });
+          this.getView().addDependent(this._oInfoPopover);
+        }
 
-  // първо показваме loader данни и отваряме
-  const oModel = new sap.ui.model.json.JSONModel({
-    createdAt: "Loading…",
-    lastUpdated: "Loading…",
-    assignedTo: "Loading…"
-  });
-  this._oInfoPopover.setModel(oModel);
-  this._oInfoPopover.openBy(oButton);
+        const oModel = new sap.ui.model.json.JSONModel({
+          createdAt: "Loading…",
+          lastUpdated: "Loading…",
+          assignedTo: "Loading…",
+        });
+        this._oInfoPopover.setModel(oModel);
+        this._oInfoPopover.openBy(oButton);
 
-  try {
-    // !!! Вариант A: snake_case полета от бекенда
-    const payload = JSON.stringify({
-      query: `query GetTodoInfo($id: ID!) {
+        try {
+          // !!! Вариант A: snake_case полета от бекенда
+          const payload = JSON.stringify({
+            query: `query GetTodoInfo($id: ID!) {
         result: todo(id: $id) {
           createdAt
           lastUpdated
           assignedTo { email }
         }
       }`,
-      variables: { id: todoId }
-    });
+            variables: { id: todoId },
+          });
 
-    const info = (await GraphqlClient.fetch(payload)) || {};
-    const fmt = sap.ui.core.format.DateFormat.getDateTimeInstance({ style: "medium" });
+          const info = (await GraphqlClient.fetch(payload)) || {};
+          const fmt = sap.ui.core.format.DateFormat.getDateTimeInstance({
+            style: "medium",
+          });
 
-    oModel.setData({
-      createdAt: info.createdAt   ? fmt.format(new Date(info.createdAt))   : "—",
-      lastUpdated: info.lastUpdated ? fmt.format(new Date(info.lastUpdated)) : "—",
-      assignedTo: info.assignedTo?.email || "—"
-    });
-  } catch (e) {
-    console.error("GetTodoInfo failed", e);
-    oModel.setData({ createdAt: "—", lastUpdated: "—", assignedTo: "—" });
-    MessageToast.show("Unable to load todo info");
-  }
-},
+          oModel.setData({
+            createdAt: info.createdAt
+              ? fmt.format(new Date(info.createdAt))
+              : "—",
+            lastUpdated: info.lastUpdated
+              ? fmt.format(new Date(info.lastUpdated))
+              : "—",
+            assignedTo: info.assignedTo?.email || "—",
+          });
+        } catch (e) {
+          console.error("GetTodoInfo failed", e);
+          oModel.setData({ createdAt: "—", lastUpdated: "—", assignedTo: "—" });
+          MessageToast.show("Unable to load todo info");
+        }
+      },
 
       onDeletePress(oEvt) {
         const oCtx = oEvt.getSource().getBindingContext("todos");
