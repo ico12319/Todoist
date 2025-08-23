@@ -1,0 +1,926 @@
+html[dir="ltr"] .myAppDemoWT .myCustomButton.sapMBtn {
+  margin-right: 0.125rem;
+}
+
+html[dir="rtl"] .myAppDemoWT .myCustomButton.sapMBtn {
+  margin-left: 0.125rem;
+}
+
+.myAppDemoWT .myCustomText {
+  display: inline-block;
+  font-weight: bold;
+}
+
+body {
+  margin: 0;
+  background: url("../images/bg.jpg") no-repeat center center fixed;
+  background-size: cover;
+}
+
+/*	ProductRating */
+.myAppDemoWTProductRating {
+  padding: 0.75rem;
+}
+
+.myAppDemoWTProductRating .sapMRI {
+  vertical-align: initial;
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-20px);
+  }
+  60% {
+    transform: translateY(-10px);
+  }
+}
+
+.bounce {
+  animation: bounce 0.8s;
+}
+
+.loginWrapper {
+  position: relative;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+}
+
+.loginPageBackground {
+  width: 100%;
+  background-size: cover;
+  background-image: url("./../images/gophers.png");
+  background-repeat: no-repeat;
+}
+
+.listPageBackground {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-image: url("./../images/background.png");
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+.loginBox {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: 400px;
+  text-align: center;
+  align-items: center;
+}
+
+.loginTitle {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.loginSubtitle {
+  font-size: 0.8rem;
+  color: #555;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.githubButton {
+  background-color: #24292e !important;
+  color: white !important;
+  border-radius: 8px !important;
+  margin-top: 1rem;
+}
+
+.logoutbutton {
+  color: white !important;
+  border-radius: 8px !important;
+  margin-top: 1rem;
+}
+
+.addlistbutton {
+  color: white !important;
+  border-radius: 10px !important;
+  margin-top: 1rem;
+  margin-left: auto;
+}
+
+.lightGreen {
+  background-color: #c0f6e0;
+}
+
+.myFancyTable {
+  margin-left: auto; /* or just “margin: 0 auto;” */
+  margin-right: auto;
+  /* optional vertical breathing room */
+  margin-top: 10rem;
+  margin-bottom: 1rem;
+}
+
+.myFancyTable .sapUiTableCnt,
+.myFancyTable .sapMListTblCnt {
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.myFancyTable .sapUiTableRow:nth-child(even),
+.myFancyTable .sapMListTblRow:nth-child(even) {
+  background-color: #f9fbfd;
+}
+
+.sapUiSizeCompact .myFancyTable .sapUiTableRow,
+.sapUiSizeCompact .myFancyTable .sapMListTblRow {
+  height: 2.25rem;
+}
+
+.myFancyTable .sapUiTableColHdr,
+.myFancyTable .sapMListTblHeaderCell {
+  font-weight: 600;
+}
+
+.myFancyTable .sapUiTableCellAction > .sapUiIcon,
+.myFancyTable .sapMListTblCellAction > .sapUiIcon {
+  color: #0a6ed1;
+  cursor: pointer;
+}
+
+.myFancyTable .sapUiTableRowHvr,
+.myFancyTable .sapMListTblRow:hover {
+  background-color: #eaf3fd !important;
+}
+
+.todoTableCustom .sapMColumnHeader {
+  background: #f0f3f5;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.todoTableCustom .sapMColumnHeader {
+  background: #f0f3f5;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.listDetailsBox {
+    background: #f7f9fa;
+    border: 1px solid #e1e7ec;
+    border-radius: .5rem;
+    padding: .75rem 1rem;
+}
+
+
+.todoTableCustom .sapMColumnHeader {
+    background: #f0f3f5;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* ==========================================================
+   Cell text
+   ========================================================== */
+.todoTableCustom .sapMLabel,
+.todoTableCustom .sapMText,
+.todoTableCustom .sapMObjectStatus {
+    text-align: center;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+/* Compact cell padding */
+.todoTableCustom .sapMListTblCell {
+    padding: .5rem .25rem;
+}
+
+/* ==========================================================
+   Alternating rows + hover highlight
+   ========================================================== */
+.todoTableCustom .sapMListTblRow:nth-child(even) {
+    background-color: #fafafa;
+}
+.todoTableCustom .sapMListTblRow:hover {
+    background-color: #eaf4ff;
+    transition: background-color .2s ease;
+}
+
+
+@keyframes rowFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
+.todoTableCustom .sapMListTblRow {
+    animation: rowFadeIn .35s ease-out;
+}
+
+.todosHeadlineBox {
+  margin-top: 2rem;          /* отстояние от горния ръб */
+  margin-bottom: 1.5rem;     /* разстояние до таблицата */
+}
+
+.todosHeadline {
+  font-family: 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;           /* по-голямо от стандартното H1 на UI5 */
+  letter-spacing: .02em;
+  position: relative;
+  color: #0a4e8f;            /* тъмно синьо за контраст */
+}
+
+.todosHeadline::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -8px;
+  width: 60%;
+  height: 3px;
+  background: linear-gradient(90deg,#0a4e8f 0%,#00a9f4 100%);
+  border-radius: 2px;
+}
+
+
+.todosHeadline:hover {
+  text-shadow: 0 0 6px rgba(0,169,244,.5);
+  cursor: default;
+}
+
+.gopherButton {
+  position: relative;               /* за псевдо-елемента */
+  overflow: hidden;                 /* да не „стърчи“ картинката */
+}
+
+.gopherButton::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;                      /* колкото иконката */
+  height: 28px;
+  transform: translate(-50%, -50%);
+  background: url("../images/gopher-button.png") no-repeat center/contain;
+  opacity: 0.18;                    /* леко прозрачно */
+  pointer-events: none;             /* да не пречи на клика */
+  transition: transform .2s ease-out;
+}
+
+/* bounce при hover */
+.gopherButton:hover::before {
+  animation: gopherBounce .6s ease-out;
+}
+
+@keyframes gopherBounce {
+  0%   { transform: translate(-50%, -50%) scale(.85); }
+  50%  { transform: translate(-50%, -60%) scale(1.15); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+.todosGopher {
+  width: 150px;            /* <–– беше ~75px; намалява ~45 % */
+  position: absolute;
+  bottom: -150px;          /* качи го малко, за да стъпи на линията */
+  right: -50px;           /* измести към текста */
+  transform-origin: 60% 90%;
+  animation:
+    peek .8s ease-out forwards,
+    wave 1.6s ease-in-out .8s infinite;
+  pointer-events: none;
+}
+
+.collabFab {
+  position: absolute;          /* относно най-близкия позициониран родител (body e ok) */
+  top: 7rem;                   /* сложи колкото разстояние ти хареса */
+  right: 10%;                  /* леко навътре от десния ръб */
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  animation: fabBounce 2.5s ease-in-out infinite;
+}
+
+/* pulsating / bouncing */
+@keyframes fabBounce {
+  0%, 100% { transform: translateY(0) scale(1);   }
+  50%      { transform: translateY(-5px) scale(1.08); }
+}
+
+/* subtle hover highlight */
+.collabFab:hover {
+  filter: brightness(1.1);
+  animation-play-state: paused;     /* спира подскоците при hover */
+}
+
+.collabHeaderBtn {
+  transition: transform .15s ease;
+}
+.collabHeaderBtn:hover {
+  transform: scale(1.15) rotate(-5deg);
+}
+
+.noHeaderDivider.sapMTB,
+.noHeaderDivider.sapMTB-Transparent-CTX {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+/* =========================
+   Palette / base tokens
+   ========================= */
+:root{
+  --neo-bg: rgba(8,12,28,0.55);           /* glass background */
+  --neo-border: rgba(255,255,255,0.08);
+  --neo-text: #EAF1FF;
+  --neo-subtext:#A9B5D6;
+  --neo-a: #6AE1FF;                       /* cyan */
+  --neo-b: #B069FF;                       /* purple */
+  --neo-danger: #ff6b6b;
+}
+
+/* Опционално: фон за цялата страница (сменѝ пътя към твоята картинка) */
+.listPageBackground{
+  background: radial-gradient(1200px 500px at 50% -100px, rgba(106,225,255,.15), transparent 60%) no-repeat,
+              radial-gradient(900px 400px at 90% 10%, rgba(176,105,255,.15), transparent 60%) no-repeat;
+  background-attachment: fixed;
+}
+
+/* =========================
+   Header / hero
+   ========================= */
+.glowHeader{
+  padding: 1rem 0 0.5rem 0;
+  animation: header-glow 3.5s ease-in-out infinite alternate;
+}
+@keyframes header-glow{
+  0%{ text-shadow: 0 0 12px rgba(106,225,255,.6); }
+  100%{ text-shadow: 0 0 12px rgba(176,105,255,.6); }
+}
+.titleNeon{
+  margin-left:.5rem;
+  font-weight:800;
+  letter-spacing:.02em;
+  background: linear-gradient(90deg,var(--neo-a),var(--neo-b));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color: transparent;
+}
+.titleIcon{ color: var(--neo-a); margin-right:.25rem; }
+
+/* badge след заглавието */
+.countBadge .sapMObjStatusText{
+  color:#466481 !important;
+  font-weight:700;
+}
+
+/* =========================
+   Table container (glass)
+   ========================= */
+.myFancyTable.sapMList{
+  background: var(--neo-bg);
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+  border: 1px solid var(--neo-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.45),
+              inset 0 0 0 1px rgba(120,64,255,.08);
+}
+
+/* header toolbar – махаме разделителя */
+.noHeaderDivider.sapMTB,
+.noHeaderDivider.sapMTB-Transparent-CTX{
+  border-bottom:none !important;
+  box-shadow:none !important;
+}
+.tableHeaderToolbar{ padding: .25rem .5rem; }
+
+/* Info stripe под header-а */
+.infoStripe{
+  background: linear-gradient(90deg, rgba(106,225,255,.16), rgba(176,105,255,.12));
+  border-top:1px solid rgba(255,255,255,.05);
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.infoStripe .infoIcon{ color:#b9dfff; margin-right:.35rem; }
+.infoStripe .infoText, .cursorHint{ color:#dbe8ff; opacity:.85; }
+
+/* Колони / заглавки */
+.colHead{
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  /* неон градиент + леко сияние */
+  background: linear-gradient(90deg, var(--neo-a), #d7e6ff 45%, var(--neo-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent; /* за да се вижда градиентът */
+  text-shadow: 0 0 10px rgba(106,225,255,.25);
+}
+.colIcon{ color: var(--neo-a); opacity:.95; } /* иконките до заглавията – по-ярки */
+
+/* Клетки/разделители */
+.myFancyTable .sapMListTblCell,
+.myFancyTable .sapMListTblHeaderCell{
+  border-bottom:1px solid rgba(255,255,255,.04);
+}
+.myFancyTable .sapMText, .myFancyTable .sapMLabel{ color: var(--neo-text); }
+.monoText{ font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; opacity:.9; }
+.multiLine{ white-space: normal; }
+
+/* Зебра ефект + hover/selected */
+.myFancyTable .sapMLIB{ background: transparent; transition: background .15s ease, box-shadow .15s ease; }
+.myFancyTable .sapMLIB:nth-child(even){ background: rgba(255,255,255,.02); }
+.rowHoverGlow.sapMLIBHoverable:hover{
+  background: rgba(94,148,255,.10);
+  box-shadow: inset 0 0 0 1px rgba(106,225,255,.28);
+}
+.myFancyTable .sapMLIBSelected{
+  background: rgba(176,105,255,.18) !important;
+  box-shadow: inset 0 0 0 1px rgba(176,105,255,.35);
+}
+
+/* Actions колона */
+.myFancyTable .lightGreen{
+  background: linear-gradient(180deg, rgba(106,225,255,.10), rgba(106,225,255,.06));
+}
+.actionsHBox{ gap:.25rem; }
+
+/* Action иконки */
+.actionNeo .sapUiIcon{
+  color:#9fb6ff; transition: transform .15s ease, text-shadow .15s ease, color .15s ease;
+}
+.actionNeo:hover .sapUiIcon{
+  color: var(--neo-a);
+  text-shadow: 0 0 10px rgba(106,225,255,.9);
+  transform: translateY(-1px);
+}
+.actionDanger .sapUiIcon{ color:#ff9a9a; }
+.actionDanger:hover .sapUiIcon{
+  color: var(--neo-danger);
+  text-shadow: 0 0 10px rgba(255,107,107,.85);
+}
+
+/* =========================
+   Search & Create button
+   ========================= */
+.searchNeo .sapMSFF{
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+.searchNeo .sapMSFI{
+  color: var(--neo-text);
+}
+
+/* Create List */
+.createBtnNeo .sapMBtnInner{
+  background: linear-gradient(90deg,var(--neo-a),var(--neo-b)) !important;
+  color:#0b0f1e !important;
+  border:none;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(106,225,255,.40);
+  font-weight:800;
+}
+.createBtnNeo:hover .sapMBtnInner{ filter: brightness(1.08); }
+.createBtnNeo:active .sapMBtnInner{ transform: translateY(1px); }
+
+/* =========================
+   Pagination buttons
+   ========================= */
+.neonPager .pagerBtn .sapMBtnInner{
+  background: linear-gradient(90deg,var(--neo-a),var(--neo-b));
+  color:#0b0f1e;
+  border:none;
+  border-radius:10px;
+  box-shadow:0 6px 16px rgba(106,225,255,.35);
+  padding:0 1rem;
+  font-weight:700;
+}
+.neonPager .pagerBtn:hover .sapMBtnInner{
+  filter:brightness(1.1);
+  box-shadow:0 8px 22px rgba(106,225,255,.5);
+}
+.neonPager .pagerBtn:active .sapMBtnInner{ transform: translateY(1px); }
+.neonPager .pagerBtn.sapMBtnDisabled .sapMBtnInner{
+  background: rgba(255,255,255,.08);
+  color: var(--neo-subtext);
+  box-shadow:none;
+}
+
+/* =========================
+   Page fade-in
+   ========================= */
+.pageContentFadeIn{ animation: fade-in .35s ease both; }
+@keyframes fade-in{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform:none;} }
+
+
+/* Headers: ID / NAME / DESCRIPTION / ACTIONS – черен текст */
+.colHead{
+  color: #0b0f1e !important;       /* красиво черно */
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+
+  /* махаме стария неонов градиент/ефекти */
+  background: none !important;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  text-shadow: none;
+}
+
+
+/* основен цвят за Actions (не-син) */
+.actionNeo .sapUiIcon{
+  color: #B069FF !important;                 /* vibrant purple */
+  text-shadow: 0 0 8px rgba(176,105,255,.45);
+}
+.actionNeo:hover .sapUiIcon{
+  color: #D7A6FF !important;
+  text-shadow: 0 0 12px rgba(176,105,255,.7);
+}
+
+/* по-осезаем hover/клик бекграунд */
+.actionsHBox .sapMBtn:hover .sapMBtnInner{
+  background: rgba(176,105,255,.12);
+  border-radius: 8px;
+}
+.actionsHBox .sapMBtn:active .sapMBtnInner{
+  background: rgba(176,105,255,.18);
+}
+
+/* ==== LIGHTER VARIANT ==== */
+
+/* по-светъл glass контейнер */
+.myFancyTable.sapMList{
+  background: rgba(255,255,255,0.35) !important;   /* беше тъмно: rgba(8,12,28,0.55) */
+  border-color: rgba(0,0,0,0.06) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25),
+              inset 0 0 0 1px rgba(255,255,255,0.35) !important;
+}
+
+/* по-светъл header ред + черни заглавия (ID/NAME/...) */
+.myFancyTable .sapMListTblHeader{
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.80)) !important;
+}
+.colHead{
+  color:#0b0f1e !important;
+  font-weight:900;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  background:none !important;
+  text-shadow:none !important;
+}
+
+/* по-леки разделители */
+.myFancyTable .sapMListTblCell,
+.myFancyTable .sapMListTblHeaderCell{
+  border-bottom:1px solid rgba(0,0,0,0.06) !important;
+}
+
+/* редове – по-светли + по-нежен hover */
+.myFancyTable .sapMLIB{
+  background: rgba(255,255,255,0.10) !important;
+}
+.myFancyTable .sapMLIB:nth-child(even){
+  background: rgba(255,255,255,0.14) !important;
+}
+.rowHoverGlow.sapMLIBHoverable:hover{
+  background: rgba(255,255,255,0.22) !important;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08) !important;
+}
+
+/* info stripe – изсветлена */
+.infoStripe{
+  background: linear-gradient(90deg, rgba(255,255,255,0.60), rgba(255,255,255,0.45)) !important;
+  border-top:1px solid rgba(0,0,0,0.06) !important;
+  border-bottom:1px solid rgba(0,0,0,0.06) !important;
+}
+.infoStripe .infoText, .cursorHint{ color:#3b4a66 !important; }
+
+/* иконките до заглавията – по-тъмни за контраст */
+.colIcon{
+  color:#5b6b88 !important;
+  opacity:1;
+  margin-left:-4px;       /* нудж вляво (пробвай -2px/-3px ако искаш по-малко) */
+  margin-right:.35rem;    /* да остане дистанция до текста */
+  position: relative;
+  top: 1px;               /* микро вертикално изравняване */
+}
+
+/* ID и Description = същия тъмен цвят като Name */
+.myFancyTable .monoText,       /* ID клетката */
+.myFancyTable .descCell {      /* Description клетката */
+  color: #0b0f1e !important;   /* тъмно, четимо */
+  opacity: 1 !important;
+  font-weight: 600;            /* близо до ObjectIdentifier заглавието */
+}
+
+/* по избор: ако някъде Description идва като линк */
+.myFancyTable .descCell .sapMLnk {
+  color: #0b0f1e !important;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* === Dialog: glass / neon === */
+.neoDialog.sapMDialog,
+.neoDialog .sapMDialogSection{
+  background: rgba(255,255,255,0.45);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.35);
+}
+
+/* header бар */
+.neoDialog .sapMBar{
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
+  box-shadow: 0 1px 0 rgba(0,0,0,.06);
+}
+.neoDialog .sapMBar .sapMTitle{
+  color:#0b0f1e;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+
+/* вътрешен layout и разстояния */
+.neoDialog .sapMDialogScrollCont{
+  padding: 14px 16px 6px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+/* етикети и полета */
+.dlgLabel .sapMLabel{
+  color:#3b4a66;
+  font-weight:700;
+}
+.dlgInput .sapMInputBaseContentWrapper{
+  background: rgba(255,255,255,.75);
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:10px;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.dlgInput:focus-within .sapMInputBaseContentWrapper{
+  border-color: rgba(176,105,255,.55);
+  box-shadow: 0 0 0 3px rgba(176,105,255,.20);
+}
+.dlgInput .sapMInputBaseInner{
+  color:#0b0f1e;
+}
+
+/* бутони */
+.dlgPrimaryBtn .sapMBtnInner{
+  background: linear-gradient(90deg, var(--neo-a, #6AE1FF), var(--neo-b, #B069FF));
+  color:#0b0f1e;
+  border:none;
+  border-radius:12px;
+  box-shadow: 0 8px 22px rgba(106,225,255,.4);
+  font-weight:800;
+}
+.dlgPrimaryBtn:hover .sapMBtnInner{ filter: brightness(1.08); }
+.dlgPrimaryBtn:active .sapMBtnInner{ transform: translateY(1px); }
+
+.dlgCancelBtn .sapMBtnInner{
+  background: transparent;
+  color:#3b4a66;
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:12px;
+}
+.dlgCancelBtn:hover .sapMBtnInner{
+  background: rgba(0,0,0,.04);
+}
+
+/* Create/Cancel в диалога = като Create List */
+.dlgPrimaryBtn .sapMBtnInner,
+.dlgCancelBtn .sapMBtnInner{
+  background: linear-gradient(90deg, var(--neo-a, #6AE1FF), var(--neo-b, #B069FF)) !important;
+  color:#0b0f1e !important;
+  border:none !important;
+  border-radius:12px !important;
+  box-shadow: 0 8px 22px rgba(106,225,255,.40) !important;
+  font-weight:800 !important;
+  padding: 0 1rem;
+}
+
+.dlgPrimaryBtn:hover .sapMBtnInner,
+.dlgCancelBtn:hover .sapMBtnInner{
+  filter: brightness(1.08);
+}
+.dlgPrimaryBtn:active .sapMBtnInner,
+.dlgCancelBtn:active .sapMBtnInner{
+  transform: translateY(1px);
+}
+
+/* по-деликатен фокус */
+.dlgPrimaryBtn .sapMBtnInner:focus,
+.dlgCancelBtn .sapMBtnInner:focus{
+  outline: 2px solid rgba(176,105,255,.7);
+  outline-offset: 2px;
+}
+
+
+/* мини гофър аватар в заглавието на диалога */
+.dlgTitleIcon{
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;            /* ако PNG-то не е идеално квадрат */
+  background: #ffffff;          /* тънка бяла „капсула“ зад иконката */
+  padding: 2px;
+  margin-right: .55rem;
+
+  /* нежен неон halo + лек релеф */
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.85),
+    0 4px 14px rgba(176,105,255,.35);
+  filter: drop-shadow(0 0 6px rgba(106,225,255,.35));
+  transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+}
+
+/* микро-анимация при hover върху header-а */
+.neoDialog .sapMBar:hover .dlgTitleIcon{
+  transform: translateY(-1px) rotate(-4deg) scale(1.03);
+  filter: drop-shadow(0 0 10px rgba(106,225,255,.55));
+}
+
+/* текстът в заглавието на диалога (ако още не е добавен) */
+.dlgTitleText{
+  color:#0b0f1e;
+  font-weight:900;
+  letter-spacing:.02em;
+}
+
+/* ===== Login page background =====
+   Ще ползваш generated файла: images/login-bg-gophers.png */
+.loginPageBackground{
+  /* фонова картинка + лек неонов градиент отгоре */
+  background:
+    radial-gradient(1200px 500px at 50% -100px, rgba(106,225,255,.18), transparent 60%) no-repeat,
+    radial-gradient(900px 400px at 90% 10%, rgba(176,105,255,.18), transparent 60%) no-repeat,
+    url("./../images/login.png") center/cover no-repeat fixed;
+}
+
+/* центриране на карето */
+.loginWrapper { min-height: 100vh; padding: 24px; }
+
+/* стъклено каре */
+.loginBox{
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.35);
+  padding: 18px 20px 20px;
+  gap: 12px;
+}
+
+/* мини гофър лого */
+.loginLogo{ width: 56px; height: 56px; border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 6px 18px rgba(176,105,255,.35);
+  background: #fff; padding: 3px;
+}
+
+/* заглавия */
+.loginTitle{
+  display:block; text-align:center;
+  font-size: 1.4rem; font-weight: 900; letter-spacing:.02em;
+  color:#0b0f1e;
+  margin-top: .25rem;
+}
+.loginSubtitle{
+  display:block; margin-top: .25rem;
+  color:#3b4a66; opacity:.9;
+}
+
+/* GitHub бутон – реюзваш неоновия стил от app-а */
+.githubButton .sapMBtnInner{
+  /* CreateBtnNeo вече ти дава градиент; тук само щипваме за иконката */
+  padding: 0 1.2rem;
+}
+.githubButton .sapMBtnIcon{
+  width: 1.2rem; height: 1.2rem; margin-right: .5rem;
+  filter: drop-shadow(0 0 6px rgba(239, 3, 3, 0.15));
+}
+
+/* малка pop-in анимация (ако нямаш вече pageContentFadeIn) */
+.pageContentFadeIn{ animation: fade-in .35s ease both; }
+@keyframes fade-in{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform:none;} }
+
+/* responsive */
+@media (max-width: 480px){
+  .loginBox{ width: 92vw; }
+}
+
+.githubButton .sapMBtnInner:focus{
+  outline: 2px solid rgba(176,105,255,.7) !important;
+  outline-offset: 2px;
+}
+
+/* контейнерът над таблицата */
+.logoDock{
+  position: relative;
+  margin: .5rem 0 .75rem;
+  z-index: 3;
+}
+
+/* “стикер” зад логото */
+.brandBadge{
+  position: relative;
+  padding: .35rem .9rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.45));
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  border: 1px solid rgba(255,255,255,.55);
+  box-shadow:
+    0 2px 10px rgba(0,0,0,.08),
+    0 0 28px rgba(99,102,241,.18),
+    0 0 64px rgba(56,189,248,.12);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.brandBadge:hover{
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,.10),
+    0 0 36px rgba(99,102,241,.22),
+    0 0 88px rgba(56,189,248,.16);
+}
+
+/* самото лого */
+.brandLogo{
+  height: 64px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,.08));
+  animation: float 8s ease-in-out infinite;
+}
+@media (min-width: 1200px){
+  .brandLogo{ height: 72px; }
+}
+@keyframes float{
+  0%,100%{ transform: translateY(0) }
+  50%{ transform: translateY(-3px) }
+}
+
+
+/* изравняваме логото по същата лява линия като Back бутона */
+.tableHeaderToolbar{
+  padding-left: .75rem;
+  padding-right: .75rem;
+}
+.logoDockLeft{
+  padding-left: .75rem;      /* същото като headerToolbar */
+  margin: .1rem 0 .3rem 0;   /* леко приближаване към таблицата */
+}
+
+/* glass badge + лек glow, по-компактно */
+.brandBadge{
+  position: relative;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.45));
+  border: 1px solid rgba(255,255,255,.55);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  box-shadow:
+    0 2px 10px rgba(0,0,0,.08),
+    0 0 28px rgba(99,102,241,.18),
+    0 0 64px rgba(56,189,248,.12);
+}
+.brandBadge--sm{ padding: .18rem .5rem; }
+
+.brandLogo{ display:block; filter: drop-shadow(0 6px 18px rgba(0,0,0,.08)); }
+.brandLogo--sm{ height: 40px; width:auto; animation: float 7s ease-in-out infinite; }
+@media (min-width:1200px){ .brandLogo--sm{ height: 46px; } }
+
+@keyframes float{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
+
+
+.tableHeaderToolbar.logoAnchor{ position: relative; padding-left:.75rem; padding-right:.75rem; }
+
+/* баджът е позициониран абсолютно над левия ръб на тулбара */
+.brandBadge--over{
+  position: absolute;
+  left: .25rem;
+  top: 0;                    /* начална точка е горния ръб на тулбара */
+  transform: translateY(-115%); /* качи го над тулбара (= точно над Back) */
+}
+
+/* останалите стилове от преди може да си оставиш (glass, glow, float) */
+.brandBadge{ border-radius:9999px; background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.45));
+  border:1px solid rgba(255,255,255,.55); backdrop-filter:blur(8px) saturate(120%); -webkit-backdrop-filter:blur(8px) saturate(120%);
+  box-shadow:0 2px 10px rgba(0,0,0,.08), 0 0 28px rgba(99,102,241,.18), 0 0 64px rgba(56,189,248,.12);
+}
+.brandBadge--sm{ padding:.18rem .5rem; }
+.brandLogo--sm{ height:40px; width:auto; display:block; filter:drop-shadow(0 6px 18px rgba(0,0,0,.08)); animation:float 7s ease-in-out infinite; }
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}

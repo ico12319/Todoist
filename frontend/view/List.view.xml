@@ -1,0 +1,197 @@
+<mvc:View
+  xmlns="sap.m"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns:core="sap.ui.core"
+  controllerName="ui5.walkthrough.controller.List"
+  class="listPageBackground"
+  displayBlock="true">
+
+  <Bar>
+        <contentMiddle>
+            <Title text="Go task" />
+        </contentMiddle>
+        <contentRight>
+            <Button
+                icon="images/gopher-logout.png"
+                text="Logout"
+                type="Emphasized"
+                press=".onLogout"
+                class="dlgPrimaryBtn"
+                iconFirst="true"
+                iconDensityAware="false"/>
+        </contentRight>
+    </Bar>
+
+  <HBox width="100%" justifyContent="Center" class="todosHeadlineBox">
+    <Image src="images/waving-gopher.png" class="todosGopher"/>
+  </HBox>
+
+
+  <VBox class="sapUiSmallMargin pageContentFadeIn">
+    <VBox class="tablePeekWrap">
+      <Table id="todosTable"
+             width="100%"
+             class="myFancyTable neoGlass neonTable sapUiSizeCompact columns"
+             items="{todos>/todos}"
+             sticky="ColumnHeaders,HeaderToolbar,InfoToolbar"
+             growing="true"
+             growingScrollToLoad="true"
+             growingThreshold="12"
+             noDataText="No todos yet">
+
+        <headerToolbar>
+          <Toolbar design="Transparent" class="noHeaderDivider tableHeaderToolbar logoAnchor">
+
+            <Button icon="sap-icon://nav-back"
+                    text="Back"
+                    type="Transparent"
+                    tooltip="Back"
+                    press=".onBackPress"
+                    class="actionNeo">
+              <layoutData>
+                <ToolbarLayoutData shrinkable="false"/>
+              </layoutData>
+            </Button>
+
+            <HBox alignItems="Center">
+              <core:Icon src="sap-icon://checklist-item" class="titleIcon"/>
+              <Title text="Available Todos" level="H4" class="titleNeon"/>
+              <ObjectStatus text="{= ${todos>/totalCount} ? ${todos>/totalCount} + ' items' : ''}"
+                            state="Success"
+                            class="countBadge sapUiTinyMarginBegin"/>
+            </HBox>
+
+            <ToolbarSpacer/>
+
+            <SearchField id="todosSearch"
+                         width="18rem"
+                         value="{todoFilters>/name}"
+                         liveChange=".onTodoSearchLiveChange"
+                         search=".onTodoSearch"
+                         placeholder="Search by name…"
+                         class="monoText">
+              <layoutData>
+                <ToolbarLayoutData shrinkable="false"/>
+              </layoutData>
+            </SearchField>
+
+            <Button id="btnFilter"
+                    icon="sap-icon://filter"
+                    text="Filter"
+                    type="Transparent"
+                    class="actionNeo"
+                    press=".onFilterPress">
+              <layoutData>
+                <ToolbarLayoutData shrinkable="false"/>
+              </layoutData>
+            </Button>
+
+            <Button id="btnSuggest"
+                    icon="sap-icon://lightbulb"
+                    text="Suggest activity"
+                    type="Transparent"
+                    class="actionNeo"
+                    press=".onSuggestPress">
+              <layoutData>
+                <ToolbarLayoutData shrinkable="false"/>
+              </layoutData>
+            </Button>
+
+            <ToolbarSpacer/>
+
+            <Button id="btnCreateTodo"
+                    icon="sap-icon://add"
+                    text="Create Todo"
+                    type="Emphasized"
+                    class="createBtnNeo"
+                    press=".onAddPress"/>
+          </Toolbar>
+        </headerToolbar>
+
+        <infoToolbar>
+          <Toolbar design="Transparent" class="infoStripe">
+            <core:Icon src="sap-icon://filter" class="infoIcon"/>
+            <Text text="Showing recent todos" class="infoText"/>
+            <ToolbarSpacer/>
+            <Text text="{= ${todos>/pageInfo/endCursor} ? 'Cursor: ' + ${todos>/pageInfo/endCursor} : ''}" class="cursorHint"/>
+          </Toolbar>
+        </infoToolbar>
+
+        <columns>
+          <Column width="14rem" hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://key" class="colIcon"/>
+              <Text text="ID" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://product" class="colIcon"/>
+              <Text text="Name" class="colHead"/>
+            </HBox>
+          </Column>
+
+        <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://detail-view" class="colIcon"/>
+              <Text text="Description" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://activity-2" class="colIcon"/>
+              <Text text="Status" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://flag" class="colIcon"/>
+              <Text text="Priority" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column hAlign="Center">
+            <HBox alignItems="Center" justifyContent="Center">
+              <core:Icon src="sap-icon://calendar" class="colIcon"/>
+              <Text text="Due Date" class="colHead"/>
+            </HBox>
+          </Column>
+
+          <Column width="8rem" hAlign="Center" class="lightGreen">
+            <VBox alignItems="Center">
+              <Text text="Actions" class="colHead"/>
+            </VBox>
+          </Column>
+        </columns>
+
+        <items>
+          <ColumnListItem vAlign="Middle" class="rowHoverGlow">
+            <cells>
+              <Text text="{todos>id}" class="monoText"/>
+              <ObjectIdentifier title="{todos>name}" text="" class="nameCell"/>
+              <Text text="{todos>description}" class="descCell multiLine"/>
+              <Text text="{todos>status}" class="monoText"/>
+              <Text text="{todos>priority}" class="monoText"/>
+              <Text text="{ path:'todos>dueDate', formatter: '.fmtDate' }" class="monoText"/>
+
+              <HBox justifyContent="Center" class="actionsHBox">
+                <Button icon="sap-icon://information" type="Transparent" tooltip="Info" class="actionNeo" press=".onInfoPress"/>
+                <Button icon="sap-icon://edit" type="Transparent" tooltip="Edit" class="actionNeo" press=".onEditPress"/>
+                <Button icon="sap-icon://delete" type="Transparent" tooltip="Delete" class="actionNeo" press=".onDeletePress"/>
+              </HBox>
+            </cells>
+          </ColumnListItem>
+        </items>
+      </Table>
+    </VBox>
+
+    <HBox width="100%" justifyContent="End" alignItems="Center"
+          class="paginationHBox neonPager sapUiSmallMarginTop">
+      <Button id="btnPrev" text="Previous" class="pagerBtn" enabled="{todos>/hasPrev}" press=".onPrevPage"/>
+      <Button id="btnNext" text="Next" class="pagerBtn" enabled="{todos>/hasNext}" press=".onNextPage"/>
+    </HBox>
+  </VBox>
+</mvc:View>

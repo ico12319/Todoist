@@ -1,0 +1,92 @@
+<mvc:View
+	controllerName="ui5.walkthrough.controller.TodoListsList"
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:mvc="sap.ui.core.mvc"
+>
+	<Panel accessibleRole="Region">
+		<headerToolbar>
+			<Toolbar>
+				<Title text="{i18n>todoListTableTitle}" />
+				<ToolbarSpacer />
+				<SearchField
+					width="50%"
+					search=".onSearchTodoLists"
+				/>
+				<ToolbarSpacer />
+				<Button
+                    text="Add Todo List"
+                    icon="sap-icon://add"
+                    press="onOpenDialog"
+                />
+			</Toolbar>
+		</headerToolbar>
+		<Table
+			id="todoLists"
+			class="sapUiResponsiveMargin"
+			width="auto"
+			items="{
+					path: 'todoLists>/'
+			}"
+		>
+			<columns>
+				<Column>
+					<Text text="{i18n>columnnNameTodoLists}" />
+				</Column>
+				<Column minScreenWidth="Small" demandPopin="true">
+					<Text text="{i18n>columnnActionsTodos}" />
+				</Column>
+			</columns>
+			<items>
+				<ColumnListItem
+					type="Navigation"
+					press="onPressAction"
+				>
+					<cells>
+						<Text text="{todoLists>name}" />
+						<Button
+							text="Add Todo Item"
+							icon="sap-icon://add"
+							press="onOpenDialog"
+							width="200px"
+						/>
+					</cells>
+				</ColumnListItem>
+			</items>
+		</Table>
+		<Dialog
+			id="addTodoToTodoListDialog"
+			title="Add Todo"
+			afterClose="onDialogClose"
+			stretchOnPhone="true"
+			contentWidth="30rem" 
+		>
+			<VBox class="sapUiSmallMargin">
+				<Label text="Name" labelFor="todoNameInput" />
+				<Input
+					id="todoIdInput"
+					placeholder="Enter todo id"
+				/>
+			</VBox>
+
+			<HBox
+				justifyContent="End"
+				class="sapUiSmallMarginTop"
+			>
+				<Button
+				    id="saveButton"
+					text="Save"
+					press="onAddTodoToList"
+					type="Emphasized"
+					enabled="true" 
+				/>
+				<Button
+					text="Cancel"
+					press="onDialogClose"
+					type="Transparent"
+					class="sapUiTinyMarginEnd"
+				/>
+			</HBox>
+		</Dialog>
+	</Panel>
+</mvc:View>
