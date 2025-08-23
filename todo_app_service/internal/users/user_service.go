@@ -2,6 +2,8 @@ package users
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
@@ -11,18 +13,16 @@ import (
 
 type userRepo interface {
 	CreateUser(ctx context.Context, user *entities.User) (*entities.User, error)
-	GetUsers(ctx context.Context, f *filters.UserFilters) ([]entities.User, error)
+	GetUsers(ctx context.Context, f filters.SqlFilters) ([]entities.User, error)
 	GetUser(ctx context.Context, userId string) (*entities.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 	UpdateUserPartially(ctx context.Context, params map[string]interface{}, fields []string) (*entities.User, error)
 	UpdateUser(ctx context.Context, userId string, user *entities.User) (*entities.User, error)
 	DeleteUser(ctx context.Context, userId string) error
 	DeleteUsers(ctx context.Context) error
-	GetTodosAssignedToUser(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.Todo, error)
-	GetUserLists(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.List, error)
-	GetUsersPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error)
-	GetUserListsPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error)
-	GetTodosAssignedToUserPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error)
+	GetTodosAssignedToUser(ctx context.Context, userID string, f filters.SqlFilters) ([]entities.Todo, error)
+	GetUserLists(ctx context.Context, userID string, f filters.SqlFilters) ([]entities.List, error)
+	GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error)
 }
 
 type userConverter interface {
@@ -44,25 +44,32 @@ type listConverter interface {
 type todoConverter interface {
 	ManyToPage(todos []entities.Todo, paginationInfo *entities.PaginationInfo) *models.TodoPage
 }
+
+type resourceIdentifierAdapter interface {
+	AdaptResourceIdentifier(rf resource_identifier.ResourceIdentifier) string
+}
 type service struct {
 	repo       userRepo
 	converter  userConverter
 	lConverter listConverter
 	tConverter todoConverter
 	uuidGen    uuidGenerator
+	rfAdapter  resourceIdentifierAdapter
 }
 
-func NewService(repo userRepo, converter userConverter, lConverter listConverter, tConverter todoConverter, uuidGen uuidGenerator) *service {
+func NewService(repo userRepo, converter userConverter, lConverter listConverter,
+	tConverter todoConverter, uuidGen uuidGenerator, rfAdapter resourceIdentifierAdapter) *service {
 	return &service{
 		repo:       repo,
 		converter:  converter,
 		lConverter: lConverter,
 		tConverter: tConverter,
 		uuidGen:    uuidGen,
+		rfAdapter:  rfAdapter,
 	}
 }
 
-func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFilters) (*models.UserPage, error) {
+func (s *service) GetUsersRecords(ctx context.Context, uFilters filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error) {
 	log.C(ctx).Info("getting users in user service")
 
 	userEntities, err := s.repo.GetUsers(ctx, uFilters)
@@ -71,7 +78,8 @@ func (s *service) GetUsersRecords(ctx context.Context, uFilters *filters.UserFil
 		return nil, err
 	}
 
-	paginationInfo, err := s.repo.GetUsersPaginationInfo(ctx)
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
+	paginationInfo, err := s.repo.GetPaginationInfo(ctx, uFilters, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last id in user service, error %s", err.Error())
 		return nil, err
@@ -177,16 +185,17 @@ func (s *service) UpdateUserRecordPartially(ctx context.Context, id string, user
 	return s.converter.ToModel(updatedEntity), nil
 }
 
-func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilter *filters.UserFilters) (*models.ListPage, error) {
+func (s *service) GetUserListsRecords(ctx context.Context, userId string, lFilter filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.ListPage, error) {
 	log.C(ctx).Info("getting lists where user participates in user service")
 
-	listEntities, err := s.repo.GetUserLists(ctx, userId, uFilter)
+	listEntities, err := s.repo.GetUserLists(ctx, userId, lFilter)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists where user participates in, error %s when calling user repo function", err.Error())
 		return nil, err
 	}
 
-	paginationInfo, err := s.repo.GetUserListsPaginationInfo(ctx, userId)
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
+	paginationInfo, err := s.repo.GetPaginationInfo(ctx, lFilter, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids in user service, error %s", err.Error())
 		return nil, err
@@ -195,7 +204,7 @@ func (s *service) GetUserListsRecords(ctx context.Context, userId string, uFilte
 	return s.lConverter.ManyToPage(listEntities, paginationInfo), nil
 }
 
-func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, userFilters *filters.UserFilters) (*models.TodoPage, error) {
+func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, tFilters filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.TodoPage, error) {
 	log.C(ctx).Info("getting todos assigned to user in user service")
 
 	if _, err := s.repo.GetUser(ctx, userId); err != nil {
@@ -203,17 +212,26 @@ func (s *service) GetTodosAssignedToUser(ctx context.Context, userId string, use
 		return nil, err
 	}
 
-	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, userId, userFilters)
+	todoEntities, err := s.repo.GetTodosAssignedToUser(ctx, userId, tFilters)
 	if err != nil {
 		log.C(ctx).Error("failed to get todos assigned to user in user service, error when calling repo")
 		return nil, err
 	}
 
-	paginationInfo, err := s.repo.GetTodosAssignedToUserPaginationInfo(ctx, userId)
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
+	paginationInfo, err := s.repo.GetPaginationInfo(ctx, tFilters, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids in user service, error %s", err.Error())
 		return nil, err
 	}
 
 	return s.tConverter.ManyToPage(todoEntities, paginationInfo), nil
+}
+
+func prepareSqlSource(adapter resourceIdentifierAdapter, rf resource_identifier.ResourceIdentifier) source.Source {
+	adaptedRf := adapter.AdaptResourceIdentifier(rf)
+	sqlSource := &source.SqlSource{}
+	sqlSource.SetSource(adaptedRf)
+
+	return sqlSource
 }

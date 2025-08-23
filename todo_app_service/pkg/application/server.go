@@ -12,6 +12,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/persistence"
 	"Todo-List/internProject/todo_app_service/internal/random_activites"
 	"Todo-List/internProject/todo_app_service/internal/refresh"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/todos"
@@ -30,48 +31,9 @@ import (
 	"net/http"
 )
 
-type uuidGenerator interface {
-	Generate() string
-}
-
-type listHandler interface {
-	HandleGetListRecord(w http.ResponseWriter, r *http.Request)
-	HandleGetLists(w http.ResponseWriter, r *http.Request)
-	HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
-	HandleGetListOwner(w http.ResponseWriter, r *http.Request)
-	HandleDeleteList(w http.ResponseWriter, r *http.Request)
-	HandleCreateList(w http.ResponseWriter, r *http.Request)
-	HandleUpdateListPartially(w http.ResponseWriter, r *http.Request)
-	HandleAddCollaborator(w http.ResponseWriter, r *http.Request)
-	HandleDeleteCollaborator(w http.ResponseWriter, r *http.Request)
-	HandleDeleteLists(w http.ResponseWriter, r *http.Request)
-}
-
-type todoHandler interface {
-	HandleTodoCreation(w http.ResponseWriter, r *http.Request)
-	HandleGetTodos(w http.ResponseWriter, r *http.Request)
-	HandleGetTodo(w http.ResponseWriter, r *http.Request)
-	HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
-	HandleDeleteTodo(w http.ResponseWriter, r *http.Request)
-	HandleDeleteTodos(w http.ResponseWriter, r *http.Request)
-	HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Request)
-	HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request)
-	HandleGetTodoByListId(w http.ResponseWriter, r *http.Request)
-	HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request)
-}
-
-type userHandler interface {
-	HandleGetUser(w http.ResponseWriter, r *http.Request)
-	HandleGetUsers(w http.ResponseWriter, r *http.Request)
-	HandleDeleteUser(w http.ResponseWriter, r *http.Request)
-	HandleGetUserLists(w http.ResponseWriter, r *http.Request)
-	HandleGetTodosAssignedToUser(w http.ResponseWriter, r *http.Request)
-	HandleDeleteUsers(w http.ResponseWriter, r *http.Request)
-}
-
 type listService interface {
 	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetCollaborators(ctx context.Context, listId string, lFilters *filters.BaseFilters) (*models.UserPage, error)
+	GetCollaborators(ctx context.Context, listId string, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error)
 	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
 }
 
@@ -84,49 +46,25 @@ type todoService interface {
 	GetTodoRecord(ctx context.Context, todoId string) (*models.Todo, error)
 }
 
-type oauthHandler interface {
-	HandleLogin(w http.ResponseWriter, r *http.Request)
-	HandleCallback(w http.ResponseWriter, r *http.Request)
-	HandleLogout(w http.ResponseWriter, r *http.Request)
-}
-
-type jwtParser interface {
-	ParseJWT(ctx context.Context, tokenString string) (*jwt.Claims, error)
-}
-
-type healthHandler interface {
-	HandleReadiness(w http.ResponseWriter, r *http.Request)
-	HandleLiveness(w http.ResponseWriter, r *http.Request)
-}
-
-type refreshHandler interface {
-	HandleRefresh(w http.ResponseWriter, r *http.Request)
-}
-
-type randomActivityHandler interface {
-	HandleSuggestion(w http.ResponseWriter, r *http.Request)
-}
-
-type genericService interface {
-	GetIDs(ctx context.Context, tableName string) (string, string, error)
+type uuidGenerator interface {
+	Generate() string
 }
 
 type server struct {
-	listHandler     listHandler
-	todoHandler     todoHandler
-	userHandler     userHandler
-	oauthHandler    oauthHandler
-	listServ        listService
-	userServ        userService
-	tServ           todoService
-	gService        genericService
-	generator       uuidGenerator
-	tokenParser     jwtParser
-	healthHandler   healthHandler
-	refreshHandler  refreshHandler
-	activityHandler randomActivityHandler
-	transact        persistence.Transactioner
+	listHandler     *lists.Handler
+	todoHandler     *todos.Handler
+	userHandler     *users.Handler
+	oauthHandler    *oauth.Handler
+	healthHandler   *checks.Handler
+	refreshHandler  *refresh.Handler
+	activityHandler *random_activites.Handler
 	configManger    *config.Config
+	jwtParser       *jwt.JwtParserService
+	listService     listService
+	userService     userService
+	todoService     todoService
+	generator       uuidGenerator
+	transact        persistence.Transactioner
 }
 
 func NewServer() *server {
@@ -136,6 +74,8 @@ func NewServer() *server {
 	dbConnection := config.OpenPostgres(configManagerInstance.DbConfig)
 
 	decoratorFactory := sql_query_decorators.GetDecoratorFactoryInstance()
+	rfAdapter := resource_identifier.GetAdapterInstance()
+
 	sqlDB := persistence.NewSqlDb(dbConnection)
 	gRepo := generic.NewRepo()
 
@@ -151,13 +91,13 @@ func NewServer() *server {
 	userConverter := converters.NewUserConverter()
 	listConverter := converters.NewListConverter()
 	refreshConverter := converters.NewRefreshConverter()
-	
+
 	httpRequester := http_helpers.NewHttpRequester()
 	httpService := http_helpers.NewService(client, nil, httpRequester)
 
-	uService := users.NewService(uRepo, userConverter, listConverter, todoConverter, uuidGen)
-	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uRepo, tRepo, userConverter)
-	tService := todos.NewService(tRepo, lRepo, uuidGen, timeGen, todoConverter, userConverter)
+	uService := users.NewService(uRepo, userConverter, listConverter, todoConverter, uuidGen, rfAdapter)
+	lService := lists.NewService(lRepo, uuidGen, timeGen, listConverter, uRepo, tRepo, userConverter, rfAdapter)
+	tService := todos.NewService(tRepo, lRepo, uuidGen, timeGen, todoConverter, userConverter, rfAdapter)
 	refreshService := refresh.NewService(refreshRepo, uRepo, refreshConverter, userConverter)
 	activityService := random_activites.NewService(configManagerInstance.ActivityConfig.ApiUrl, httpService)
 
@@ -191,15 +131,15 @@ func NewServer() *server {
 		todoHandler:     tHandler,
 		userHandler:     uHandler,
 		oauthHandler:    oHandler,
-		listServ:        lService,
-		userServ:        uService,
-		tServ:           tService,
-		generator:       uuidGen,
-		tokenParser:     tokenParser,
 		healthHandler:   hHandler,
 		refreshHandler:  rHandler,
 		activityHandler: activityHandler,
 		configManger:    configManagerInstance,
+		jwtParser:       tokenParser,
+		todoService:     tService,
+		listService:     lService,
+		userService:     uService,
+		generator:       uuidGen,
 		transact:        sqlDB,
 	}
 }
@@ -328,7 +268,7 @@ func (s *server) Start() {
 	s.registerRefreshPaths(refreshRouter)
 
 	authRouter := router.PathPrefix("").Subrouter()
-	authRouter.Use(middlewares.AuthorisationMiddlewareFunc(s.userServ, s.tokenParser, s.transact))
+	authRouter.Use(middlewares.AuthorisationMiddlewareFunc(s.userService, s.jwtParser, s.transact))
 
 	randomActivityRouter := router.PathPrefix("/activities").Subrouter()
 	s.registerRandomActivityPaths(randomActivityRouter)
@@ -346,7 +286,7 @@ func (s *server) Start() {
 
 	listRouter := authRouter.PathPrefix("/lists").Subrouter()
 	listIdAuthRouter := listRouter.PathPrefix(fmt.Sprintf("/{list_id:%s}", constants.UUID_REGEX)).Subrouter()
-	listIdAuthRouter.Use(middlewares.ExtractionListIdMiddlewareFunc, middlewares.ListAccessPermissionMiddlewareFunc(s.listServ, s.transact))
+	listIdAuthRouter.Use(middlewares.ExtractionListIdMiddlewareFunc, middlewares.ListAccessPermissionMiddlewareFunc(s.listService, s.transact))
 	s.registerListIdAuthRoutes(listIdAuthRouter)
 
 	listIdReadRouter := listRouter.PathPrefix(fmt.Sprintf("/{list_id:%s}", constants.UUID_REGEX)).Subrouter()
@@ -367,7 +307,7 @@ func (s *server) Start() {
 	s.registerReadTodoIdPaths(todoIdReaderRouter)
 
 	todoIdAuthRouter := todoRouter.PathPrefix(fmt.Sprintf("/{todo_id:%s}", constants.UUID_REGEX)).Subrouter()
-	todoIdAuthRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc, middlewares.NewTodoModifyMiddlewareFunc(s.tServ, s.listServ, s.transact))
+	todoIdAuthRouter.Use(middlewares.ExtractionTodoIdMiddlewareFunc, middlewares.NewTodoModifyMiddlewareFunc(s.todoService, s.listService, s.transact))
 	s.registerTodoIdAuthRoutes(todoIdAuthRouter)
 
 	todoListReaderRouter := listIdReadRouter.PathPrefix("/todos").Subrouter()

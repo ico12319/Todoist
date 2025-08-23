@@ -29,7 +29,7 @@ type httpService interface {
 	Redirect(w http.ResponseWriter, r *http.Request, url string, httpStatusCode int)
 }
 
-type handler struct {
+type Handler struct {
 	service     oauthService
 	issuer      jwtIssuer
 	httpService httpService
@@ -37,8 +37,8 @@ type handler struct {
 	frontendUrl string
 }
 
-func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService, transact persistence.Transactioner, frontendUrl string) *handler {
-	return &handler{
+func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService, transact persistence.Transactioner, frontendUrl string) *Handler {
+	return &Handler{
 		service:     service,
 		issuer:      issuer,
 		httpService: httpService,
@@ -47,7 +47,7 @@ func NewHandler(service oauthService, issuer jwtIssuer, httpService httpService,
 	}
 }
 
-func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	tx, err := h.transact.BeginContext(ctx)
@@ -79,7 +79,7 @@ func (h *handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	h.httpService.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -139,7 +139,7 @@ func (h *handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	h.httpService.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func (h *handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("handling logout in oauth handler")
 

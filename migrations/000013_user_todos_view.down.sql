@@ -1,0 +1,5 @@
+BEGIN;
+
+DROP VIEW IF EXISTS user_todos;
+
+COMMIT;

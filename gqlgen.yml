@@ -156,7 +156,7 @@ models:
     fields:
       assignedTo:
         resolver: true
-      participateIn:
+      owns:
         resolver: true
   # gqlgen provides a default GraphQL UUID convenience wrapper for github.com/google/uuid 
   # but you can override this to provide your own GraphQL UUID implementation

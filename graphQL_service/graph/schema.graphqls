@@ -40,8 +40,8 @@ type User{
   id: ID!
   email: String!
   role: UserRole @hasRole
-  assignedTo(first: Int, after: ID, last: Int, before: ID,filter: TodosFilterInput): TodoPage!
-  participateIn(first: Int, after: ID, last: Int, before: ID): ListPage!
+  assignedTo(first: Int, after: ID, last: Int, before: ID, filter: TodosFilterInput): TodoPage!
+  owns(first: Int, after: ID, last: Int, before: ID, filter: ListFilterInput): ListPage!
 }
 
 type Todo{
@@ -54,7 +54,7 @@ type Todo{
   lastUpdated: Time!
   priority: Priority!
   assignedTo: User
-  dueData: Time
+  dueDate: Time
 }
 
 type List{
@@ -84,6 +84,11 @@ input TodosFilterInput{
   status: TodoStatus
   priority: Priority
   type: TodoType
+  name: String
+}
+
+input ListFilterInput{
+  name: String
 }
 
 input CreateListInput{
@@ -138,8 +143,8 @@ type DeleteListPayload{
   id: ID!
   name: String
   description: String
-  created_at: Time
-  last_updated: Time
+  createdAt: Time
+  lastUpdated: Time
 }
 
 type PageInfo{
@@ -194,7 +199,7 @@ input RefreshTokenInput{
 }
 
 type Query{
-  lists(first: Int, after: ID, last: Int, before: ID): ListPage!
+  lists(first: Int, after: ID, last: Int, before: ID, criteria: ListFilterInput): ListPage!
   list(id: ID!): List
 
   todos(first: Int, after: ID, last: Int, before: ID, criteria: TodosFilterInput): TodoPage!

@@ -14,15 +14,15 @@ type pingSender interface {
 	PingContext(ctx context.Context) error
 }
 
-type handler struct {
+type Handler struct {
 	sender pingSender
 }
 
-func NewHandler(sender pingSender) *handler {
-	return &handler{sender: sender}
+func NewHandler(sender pingSender) *Handler {
+	return &Handler{sender: sender}
 }
 
-func (h *handler) HandleReadiness(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleReadiness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("handling liveness in health handler")
 
@@ -50,7 +50,7 @@ func (h *handler) HandleReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) HandleLiveness(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleLiveness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("handling readiness in health handler")
 

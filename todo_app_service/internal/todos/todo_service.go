@@ -2,6 +2,8 @@ package todos
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
@@ -21,13 +23,12 @@ type todoRepo interface {
 	DeleteTodosByListId(ctx context.Context, listId string) error
 	DeleteTodos(ctx context.Context) error
 	GetTodo(ctx context.Context, todoId string) (*entities.Todo, error)
-	GetTodos(ctx context.Context, f *filters.TodoFilters) ([]entities.Todo, error)
-	GetTodosByListId(ctx context.Context, listId string, f *filters.TodoFilters) ([]entities.Todo, error)
+	GetTodos(ctx context.Context, f filters.SqlFilters) ([]entities.Todo, error)
+	GetTodosByListId(ctx context.Context, listId string, f filters.SqlFilters) ([]entities.Todo, error)
 	GetTodoAssigneeTo(ctx context.Context, todoId string) (*entities.User, error)
 	GetTodoByListId(ctx context.Context, listId string, todoId string) (*entities.Todo, error)
 	UnassignUserFromTodos(ctx context.Context, userId string, listId string) error
-	GetTodosPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error)
-	GetTodosFromListPaginationInfo(ctx context.Context, listID string) (*entities.PaginationInfo, error)
+	GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error)
 }
 
 type listRepo interface {
@@ -58,6 +59,10 @@ type userConverter interface {
 	ToModel(user *entities.User) *models.User
 }
 
+type resourceIdentifierAdapter interface {
+	AdaptResourceIdentifier(rf resource_identifier.ResourceIdentifier) string
+}
+
 type service struct {
 	tRepo      todoRepo
 	lRepo      listRepo
@@ -65,10 +70,11 @@ type service struct {
 	timeGen    timeGenerator
 	tConverter todoConverter
 	uConverter userConverter
+	rfAdapter  resourceIdentifierAdapter
 }
 
 func NewService(tRepo todoRepo, lRepo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
-	todoConverter todoConverter, userConverter userConverter) *service {
+	todoConverter todoConverter, userConverter userConverter, rfAdapter resourceIdentifierAdapter) *service {
 	return &service{
 		tRepo:      tRepo,
 		lRepo:      lRepo,
@@ -76,6 +82,7 @@ func NewService(tRepo todoRepo, lRepo listRepo, uuidGen uuidGenerator, timeGen t
 		timeGen:    timeGen,
 		tConverter: todoConverter,
 		uConverter: userConverter,
+		rfAdapter:  rfAdapter,
 	}
 }
 
@@ -207,16 +214,17 @@ func (s *service) GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*
 	return s.uConverter.ToModel(assignee), nil
 }
 
-func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) (*models.TodoPage, error) {
+func (s *service) GetTodoRecords(ctx context.Context, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.TodoPage, error) {
 	log.C(ctx).Info("getting todos in todo service")
 
-	eTodos, err := s.tRepo.GetTodos(ctx, filters)
+	eTodos, err := s.tRepo.GetTodos(ctx, f)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos due to an error in todo service %s", err.Error())
 		return nil, err
 	}
 
-	paginationInfo, err := s.tRepo.GetTodosPaginationInfo(ctx)
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
+	paginationInfo, err := s.tRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
 		return nil, err
@@ -225,7 +233,7 @@ func (s *service) GetTodoRecords(ctx context.Context, filters *filters.TodoFilte
 	return s.tConverter.ManyToPage(eTodos, paginationInfo), nil
 }
 
-func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) (*models.TodoPage, error) {
+func (s *service) GetTodosByListId(ctx context.Context, f filters.SqlFilters, listId string, rf resource_identifier.ResourceIdentifier) (*models.TodoPage, error) {
 	log.C(ctx).Infof("getting todos of list with id %s in list service", listId)
 
 	if _, err := s.lRepo.GetList(ctx, listId); err != nil {
@@ -233,13 +241,14 @@ func (s *service) GetTodosByListId(ctx context.Context, filters *filters.TodoFil
 		return nil, err
 	}
 
-	eTodos, err := s.tRepo.GetTodosByListId(ctx, listId, filters)
+	eTodos, err := s.tRepo.GetTodosByListId(ctx, listId, f)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when calling todo repo", listId)
 		return nil, err
 	}
 
-	paginationInfo, err := s.tRepo.GetTodosFromListPaginationInfo(ctx, listId)
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
+	paginationInfo, err := s.tRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
 		return nil, err
@@ -297,4 +306,13 @@ func (s *service) UnassignUserFromTodos(ctx context.Context, userId string, list
 	}
 
 	return nil
+}
+
+func prepareSqlSource(adapter resourceIdentifierAdapter, rf resource_identifier.ResourceIdentifier) source.Source {
+	adaptedRf := adapter.AdaptResourceIdentifier(rf)
+
+	sqlSource := &source.SqlSource{}
+	sqlSource.SetSource(adaptedRf)
+
+	return sqlSource
 }

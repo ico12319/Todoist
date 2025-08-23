@@ -98,9 +98,9 @@ func (r *mutationResolver) ExchangeRefreshToken(ctx context.Context, input gql.R
 }
 
 // Lists is the resolver for the lists field.
-func (r *queryResolver) Lists(ctx context.Context, first *int32, after *string, last *int32, before *string) (*gql.ListPage, error) {
-	baseFilters := helpers.InitBaseFilters(first, after, last, before)
-	return r.lResolver.Lists(ctx, baseFilters)
+func (r *queryResolver) Lists(ctx context.Context, first *int32, after *string, last *int32, before *string, criteria *gql.ListFilterInput) (*gql.ListPage, error) {
+	listFilters := helpers.InitListFilters(first, after, last, before, criteria)
+	return r.lResolver.Lists(ctx, listFilters)
 }
 
 // List is the resolver for the list field.
@@ -151,10 +151,10 @@ func (r *userResolver) AssignedTo(ctx context.Context, obj *gql.User, first *int
 	return r.uResolver.AssignedTo(ctx, obj, todoFilters)
 }
 
-// ParticipateIn is the resolver for the participateIn field.
-func (r *userResolver) ParticipateIn(ctx context.Context, obj *gql.User, first *int32, after *string, last *int32, before *string) (*gql.ListPage, error) {
-	baseFilters := helpers.InitBaseFilters(first, after, last, before)
-	return r.uResolver.ParticipateIn(ctx, obj, baseFilters)
+// Owns is the resolver for the owns field.
+func (r *userResolver) Owns(ctx context.Context, obj *gql.User, first *int32, after *string, last *int32, before *string, filter *gql.ListFilterInput) (*gql.ListPage, error) {
+	lFilters := helpers.InitListFilters(first, after, last, before, filter)
+	return r.uResolver.Owns(ctx, obj, lFilters)
 }
 
 // List returns ListResolver implementation.

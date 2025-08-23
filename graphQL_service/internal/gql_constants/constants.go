@@ -38,6 +38,7 @@ const (
 	ROLE     = "role"
 	BEFORE   = "before"
 	LAST     = "last"
+	NAME     = "name"
 )
 
 const (

@@ -15,17 +15,17 @@ type randomActivityService interface {
 	Suggest(ctx context.Context) (*models.RandomActivity, error)
 }
 
-type handler struct {
+type Handler struct {
 	service randomActivityService
 }
 
-func NewHandler(service randomActivityService) *handler {
-	return &handler{
+func NewHandler(service randomActivityService) *Handler {
+	return &Handler{
 		service: service,
 	}
 }
 
-func (h *handler) HandleSuggestion(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleSuggestion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()

@@ -4,7 +4,6 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/gitHub"
-	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	config "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/constants"
 	"context"
@@ -189,8 +188,8 @@ func DetermineJWTErrorWhenParsingWithClaims(ctx context.Context, err error) erro
 }
 
 func EncodeErrorWithCorrectStatusCode(w http.ResponseWriter, err error) {
-	var nfErr *application_errors.NotFoundError
-	if errors.As(err, &nfErr) {
+	var nff *application_errors.NotFoundError
+	if errors.Is(err, sql.ErrNoRows) || errors.As(err, &nff) {
 		EncodeError(w, err.Error(), http.StatusNotFound)
 	} else {
 		EncodeError(w, err.Error(), http.StatusInternalServerError)
@@ -249,11 +248,4 @@ func CheckForNotFoundError(err error) bool {
 	}
 
 	return false
-}
-
-func DetermineSortingOrder(f *filters.BaseFilters) string {
-	if len(f.Last) != 0 {
-		return constants.DESC_ORDER
-	}
-	return constants.ASC_ORDER
 }

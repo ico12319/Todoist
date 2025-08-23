@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -19,7 +20,7 @@ type tService interface {
 
 type lService interface {
 	GetListOwnerRecord(context.Context, string) (*models.User, error)
-	GetCollaborators(context.Context, string, *filters.BaseFilters) (*models.UserPage, error)
+	GetCollaborators(ctx context.Context, listId string, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error)
 }
 
 type todoModifyMiddleware struct {
@@ -78,7 +79,10 @@ func (t *todoModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	collaboratorsPage, err := t.lService.GetCollaborators(ctx, todo.ListId, &filters.BaseFilters{})
+	rf := &resource_identifier.GenericResourceIdentifier{}
+	rf.SetResourceIdentifier(constants.ListsUsersIdentifier)
+
+	collaboratorsPage, err := t.lService.GetCollaborators(ctx, todo.ListId, &filters.UserFilters{ListID: todo.ListId}, rf)
 	if err != nil {
 		log.C(ctx).Errorf("failed to serve http, error %s when trying to get list with id %s collaborators", err.Error(), todo.ListId)
 

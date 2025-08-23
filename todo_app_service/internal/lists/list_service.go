@@ -2,6 +2,8 @@ package lists
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/entities"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
 	"Todo-List/internProject/todo_app_service/pkg/handler_models"
@@ -13,9 +15,9 @@ import (
 
 //go:generate mockery --name=listRepo --exported --output=./mocks --outpkg=mocks --filename=list_repo.go --with-expecter=true
 type listRepo interface {
-	GetLists(ctx context.Context, f *filters.BaseFilters) ([]entities.List, error)
+	GetLists(ctx context.Context, f filters.SqlFilters) ([]entities.List, error)
 	GetList(context.Context, string) (*entities.List, error)
-	GetListCollaborators(ctx context.Context, listID string, f *filters.BaseFilters) ([]entities.User, error)
+	GetListCollaborators(ctx context.Context, listID string, f filters.SqlFilters) ([]entities.User, error)
 	GetListOwner(context.Context, string) (*entities.User, error)
 	DeleteList(context.Context, string) error
 	DeleteLists(context.Context) error
@@ -24,8 +26,7 @@ type listRepo interface {
 	UpdateListSharedWith(context.Context, string, string) error
 	DeleteCollaborator(context.Context, string, string) error
 	CheckWhetherUserIsCollaborator(context.Context, string, string) (bool, error)
-	GetListsPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error)
-	GetListCollaboratorsPaginationInfo(ctx context.Context, listID string) (*entities.PaginationInfo, error)
+	GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error)
 }
 
 type todoRepo interface {
@@ -63,6 +64,10 @@ type userRepo interface {
 	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 }
 
+type resourceIdentifierAdapter interface {
+	AdaptResourceIdentifier(rf resource_identifier.ResourceIdentifier) string
+}
+
 type service struct {
 	lRepo      listRepo
 	uRepo      userRepo
@@ -71,10 +76,12 @@ type service struct {
 	timeGen    timeGenerator
 	lConverter listConverter
 	uConverter userConverter
+	rfAdapter  resourceIdentifierAdapter
 }
 
 func NewService(repo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
-	listConverter listConverter, uRep userRepo, tRepo todoRepo, userConverter userConverter) *service {
+	listConverter listConverter, uRep userRepo, tRepo todoRepo,
+	userConverter userConverter, rfAdapter resourceIdentifierAdapter) *service {
 	return &service{
 		lRepo:      repo,
 		uuidGen:    uuidGen,
@@ -83,10 +90,11 @@ func NewService(repo listRepo, uuidGen uuidGenerator, timeGen timeGenerator,
 		uRepo:      uRep,
 		uConverter: userConverter,
 		tRepo:      tRepo,
+		rfAdapter:  rfAdapter,
 	}
 }
 
-func (s *service) GetListsRecords(ctx context.Context, f *filters.BaseFilters) (*models.ListPage, error) {
+func (s *service) GetListsRecords(ctx context.Context, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.ListPage, error) {
 	log.C(ctx).Info("getting lists from list service")
 
 	listEntities, err := s.lRepo.GetLists(ctx, f)
@@ -95,7 +103,12 @@ func (s *service) GetListsRecords(ctx context.Context, f *filters.BaseFilters) (
 		return nil, err
 	}
 
-	paginationInfo, err := s.lRepo.GetListsPaginationInfo(ctx)
+	adaptedRf := s.rfAdapter.AdaptResourceIdentifier(rf)
+	sqlSource := &source.SqlSource{}
+	sqlSource.SetSource(adaptedRf)
+
+	log.C(ctx).Infof("source is %s", sqlSource.GetSource())
+	paginationInfo, err := s.lRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
 		return nil, err
@@ -207,7 +220,7 @@ func (s *service) DeleteLists(ctx context.Context) error {
 	return nil
 }
 
-func (s *service) GetCollaborators(ctx context.Context, listId string, f *filters.BaseFilters) (*models.UserPage, error) {
+func (s *service) GetCollaborators(ctx context.Context, listId string, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error) {
 	log.C(ctx).Info("getting list collaborators from list service")
 
 	if _, err := s.lRepo.GetList(ctx, listId); err != nil {
@@ -221,7 +234,11 @@ func (s *service) GetCollaborators(ctx context.Context, listId string, f *filter
 		return nil, err
 	}
 
-	paginationInfo, err := s.lRepo.GetListCollaboratorsPaginationInfo(ctx, listId)
+	adaptedRf := s.rfAdapter.AdaptResourceIdentifier(rf)
+	sqlSource := &source.SqlSource{}
+	sqlSource.SetSource(adaptedRf)
+
+	paginationInfo, err := s.lRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
 		return nil, err

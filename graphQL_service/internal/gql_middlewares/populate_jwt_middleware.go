@@ -26,12 +26,7 @@ func (p *populateJwtMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request
 	jwt := r.Header.Get("Authorization")
 	ctx = context.WithValue(ctx, AuthToken, jwt)
 
-	if p.next == nil {
-		log.C(ctx).Info("nil e bee")
-	}
-
 	p.next.ServeHTTP(w, r.WithContext(ctx))
-	log.C(ctx).Info("pisna mi bate")
 }
 
 func NewJwtPopulateMiddleware() mux.MiddlewareFunc {

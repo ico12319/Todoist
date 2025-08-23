@@ -43,11 +43,10 @@ func (u *urlDecoratorFactory) CreateUrlDecorator(ctx context.Context, initialUrl
 	if filters == nil {
 		return nil
 	}
+	log.C(ctx).Info("creating url decorator in url decorator factory")
 
 	mu.Lock()
 	defer mu.Unlock()
-
-	log.C(ctx).Info("creating url decorator in url decorator factory")
 
 	baseDecorator := NewBaseUrl(initialUrl)
 

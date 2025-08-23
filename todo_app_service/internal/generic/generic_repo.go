@@ -27,7 +27,7 @@ func (*repository) GetPaginationInfo(ctx context.Context, sourceName string, fil
 
 	sqlQuery := fmt.Sprintf(
 		`WITH filtered AS(
-						SELECT id FROM %s WHERE %s 
+						SELECT id FROM %s %s 
 					)
 					 SELECT
     				(SELECT id FROM filtered

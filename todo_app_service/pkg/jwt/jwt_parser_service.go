@@ -13,15 +13,15 @@ type parser interface {
 	ParseWithClaims(string, *Claims) (*jwt.Token, *Claims, error)
 }
 
-type jwtParserService struct {
+type JwtParserService struct {
 	parser parser
 }
 
-func NewJwtParseService(parser parser) *jwtParserService {
-	return &jwtParserService{parser: parser}
+func NewJwtParseService(parser parser) *JwtParserService {
+	return &JwtParserService{parser: parser}
 }
 
-func (j *jwtParserService) ParseJWT(ctx context.Context, tokenString string) (*Claims, error) {
+func (j *JwtParserService) ParseJWT(ctx context.Context, tokenString string) (*Claims, error) {
 	log.C(ctx).Info("parsing jwt token")
 
 	claims := &Claims{}

@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -67,7 +68,7 @@ func (*repository) DeleteUser(ctx context.Context, id string) error {
 
 	_, err = persist.ExecContext(ctx, sqlQueryString, id)
 	if err != nil {
-		log.C(ctx).Errorf("failed to delete user, error when executing sql query")
+		log.C(ctx).Errorf("failed to delete user, error %s when executing sql query", err.Error())
 		return errors.New("unexpected database error")
 	}
 
@@ -154,7 +155,7 @@ func (r *repository) UpdateUser(ctx context.Context, id string, user *entities.U
 	return r.GetUser(ctx, user.Id.String())
 }
 
-func (r *repository) GetUsers(ctx context.Context, f *filters.UserFilters) ([]entities.User, error) {
+func (r *repository) GetUsers(ctx context.Context, f filters.SqlFilters) ([]entities.User, error) {
 	log.C(ctx).Info("getting users in user repository")
 
 	persist, err := persistence.FromCtx(ctx)
@@ -164,6 +165,8 @@ func (r *repository) GetUsers(ctx context.Context, f *filters.UserFilters) ([]en
 	}
 
 	baseQuery := `SELECT id, email, role FROM users`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
 
 	decorator, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
@@ -175,7 +178,7 @@ func (r *repository) GetUsers(ctx context.Context, f *filters.UserFilters) ([]en
 	completeQuery := fmt.Sprintf(`SELECT id, email, role FROM (%s) ORDER BY id`, sqlQueryString)
 
 	var userEntities []entities.User
-	if err = persist.SelectContext(ctx, &userEntities, completeQuery); err != nil {
+	if err = persist.SelectContext(ctx, &userEntities, completeQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to get users from user repository due to a database error %s", err.Error())
 		return nil, errors.New("unexpected database error")
 	}
@@ -231,8 +234,8 @@ func (*repository) GetUserByEmail(ctx context.Context, email string) (*entities.
 	return entity, nil
 }
 
-func (r *repository) GetTodosAssignedToUser(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.Todo, error) {
-	log.C(ctx).Info("getting todos assigned to user in user repository")
+func (r *repository) GetTodosAssignedToUser(ctx context.Context, userID string, f filters.SqlFilters) ([]entities.Todo, error) {
+	log.C(ctx).Infof("getting todos assigned to user with id %s in user repository", userID)
 
 	persist, err := persistence.FromCtx(ctx)
 	if err != nil {
@@ -241,7 +244,10 @@ func (r *repository) GetTodosAssignedToUser(ctx context.Context, userID string, 
 	}
 
 	baseQuery := `SELECT id, name, description, list_id, status, created_at,
-				last_updated, assigned_to, due_date, priority FROM user_todos WHERE user_id = $1`
+				last_updated, assigned_to, due_date, priority FROM user_todos`
+
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
 
 	decorator, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
@@ -254,7 +260,7 @@ func (r *repository) GetTodosAssignedToUser(ctx context.Context, userID string, 
 				last_updated, assigned_to, due_date, priority FROM (%s) ORDER BY id`, sqlQuery)
 
 	var todos []entities.Todo
-	if err = persist.SelectContext(ctx, &todos, completeQuery, userID); err != nil {
+	if err = persist.SelectContext(ctx, &todos, completeQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to get todos assigned to user, error %s when executing sql query", err.Error())
 		return nil, errors.New("unexpected database error")
 	}
@@ -262,8 +268,8 @@ func (r *repository) GetTodosAssignedToUser(ctx context.Context, userID string, 
 	return todos, nil
 }
 
-func (r *repository) GetUserLists(ctx context.Context, userID string, f *filters.UserFilters) ([]entities.List, error) {
-	log.C(ctx).Info("getting user lists in user repository")
+func (r *repository) GetUserLists(ctx context.Context, userID string, f filters.SqlFilters) ([]entities.List, error) {
+	log.C(ctx).Infof("getting lists of user with id %s in user repository", userID)
 
 	persist, err := persistence.FromCtx(ctx)
 	if err != nil {
@@ -271,7 +277,9 @@ func (r *repository) GetUserLists(ctx context.Context, userID string, f *filters
 		return nil, err
 	}
 
-	baseQuery := `SELECT DISTINCT id, name, created_at, last_updated, owner, description FROM lists_and_users WHERE owner = $1`
+	baseQuery := `SELECT DISTINCT id, name, created_at, last_updated, owner, description FROM lists_and_users`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
 
 	decorator, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
@@ -282,34 +290,22 @@ func (r *repository) GetUserLists(ctx context.Context, userID string, f *filters
 	sqlQueryString := decorator.DetermineCorrectSqlQuery(ctx)
 	completeQuery := fmt.Sprintf(`SELECT id, name, created_at, last_updated, owner, description FROM (%s) ORDER BY id`, sqlQueryString)
 
-	log.C(ctx).Errorf(completeQuery)
 	var listEntities []entities.List
-	if err = persist.SelectContext(ctx, &listEntities, completeQuery, userID); err != nil {
+	if err = persist.SelectContext(ctx, &listEntities, completeQuery, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			log.C(ctx).Errorf("sql err no rows when trying to get lists of user id %s, error %s", userID, err.Error())
-			return nil, application_errors.NewNotFoundError(constants.USER_TARGET, userID)
+			return nil, err
 		}
 		log.C(ctx).Errorf("failed to get lists where user participates, error %s when executing sql query", err.Error())
-		return nil, errors.New("unexpected database error")
+		return nil, err
 	}
 
 	return listEntities, nil
 }
 
-func (r *repository) GetUsersPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error) {
+func (r *repository) GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error) {
 	log.C(ctx).Info("getting users pagination info in user repository")
 
-	return r.genericRepo.GetPaginationInfo(ctx, "users", "TRUE", nil)
-}
-
-func (r *repository) GetUserListsPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error) {
-	log.C(ctx).Infof("getting user lists pagination info of user with id %s in user repository", userID)
-
-	return r.genericRepo.GetPaginationInfo(ctx, "lists_and_users", `owner = $1`, []interface{}{userID})
-}
-
-func (r *repository) GetTodosAssignedToUserPaginationInfo(ctx context.Context, userID string) (*entities.PaginationInfo, error) {
-	log.C(ctx).Infof("getting todos assigned to user with id %s pagination info in user repository", userID)
-
-	return r.genericRepo.GetPaginationInfo(ctx, "user_todos", `user_id = $1`, []interface{}{userID})
+	filteringClause, params := f.BuildSQLFiltering()
+	return r.genericRepo.GetPaginationInfo(ctx, s.GetSource(), filteringClause, params)
 }

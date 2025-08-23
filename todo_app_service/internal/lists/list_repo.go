@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -119,7 +120,7 @@ func (*repository) DeleteLists(ctx context.Context) error {
 	return nil
 }
 
-func (r *repository) GetLists(ctx context.Context, f *filters.BaseFilters) ([]entities.List, error) {
+func (r *repository) GetLists(ctx context.Context, f filters.SqlFilters) ([]entities.List, error) {
 	log.C(ctx).Info("getting all lists from list repository")
 
 	persist, err := persistence.FromCtx(ctx)
@@ -129,6 +130,9 @@ func (r *repository) GetLists(ctx context.Context, f *filters.BaseFilters) ([]en
 	}
 
 	baseQuery := `SELECT id, name, created_at, last_updated, owner, description FROM lists`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
+
 	retriever, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
 		log.C(ctx).Error("failed to determine sql query, error when calling decorator factory")
@@ -136,12 +140,11 @@ func (r *repository) GetLists(ctx context.Context, f *filters.BaseFilters) ([]en
 	}
 
 	sqlQueryString := retriever.DetermineCorrectSqlQuery(ctx)
-
 	completeQuery := fmt.Sprintf(`SELECT id, name, created_at, last_updated, owner, description
 FROM (%s) ORDER BY id`, sqlQueryString)
 
 	var lists []entities.List
-	if err = persist.SelectContext(ctx, &lists, completeQuery); err != nil {
+	if err = persist.SelectContext(ctx, &lists, completeQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to parse list entities due to a failure in the execution of the sql query %s", err.Error())
 		return nil, err
 	}
@@ -232,8 +235,8 @@ func (*repository) DeleteCollaborator(ctx context.Context, listId string, userId
 	return nil
 }
 
-func (r *repository) GetListCollaborators(ctx context.Context, listID string, f *filters.BaseFilters) ([]entities.User, error) {
-	log.C(ctx).Info("getting list's collaborators in list repository")
+func (r *repository) GetListCollaborators(ctx context.Context, listID string, f filters.SqlFilters) ([]entities.User, error) {
+	log.C(ctx).Infof("getting collaborators of list with id %s in list repository", listID)
 
 	persist, err := persistence.FromCtx(ctx)
 	if err != nil {
@@ -241,7 +244,10 @@ func (r *repository) GetListCollaborators(ctx context.Context, listID string, f 
 		return nil, err
 	}
 
-	baseQuery := `SELECT id, email, role FROM lists_collaborators WHERE list_id = $1`
+	baseQuery := `SELECT id, email, role FROM lists_collaborators`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
+
 	sqlQueryBuilder, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get collaborators, error when calling decorator factory")
@@ -252,7 +258,7 @@ func (r *repository) GetListCollaborators(ctx context.Context, listID string, f 
 	completeSqlQuery := fmt.Sprintf(`SELECT id, email, role FROM (%s) ORDER BY id`, sqlQueryString)
 
 	var collaborators []entities.User
-	if err = persist.SelectContext(ctx, &collaborators, completeSqlQuery, listID); err != nil {
+	if err = persist.SelectContext(ctx, &collaborators, completeSqlQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to get list's collaborators due to an error %s in the execution of the sql query", err.Error())
 		return nil, err
 	}
@@ -316,14 +322,9 @@ WHERE list_id = $1 AND user_id = $2`
 	return true, nil
 }
 
-func (r *repository) GetListsPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error) {
+func (r *repository) GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error) {
 	log.C(ctx).Info("getting pagination info about lists in list repo")
 
-	return r.genericRepo.GetPaginationInfo(ctx, "lists", "TRUE", nil)
-}
-
-func (r *repository) GetListCollaboratorsPaginationInfo(ctx context.Context, listID string) (*entities.PaginationInfo, error) {
-	log.C(ctx).Infof("getting pagination info about collaborators of list with id %s in list repo", listID)
-
-	return r.genericRepo.GetPaginationInfo(ctx, "lists_collaborators", `list_id = $1`, []interface{}{listID})
+	filteringClause, params := f.BuildSQLFiltering()
+	return r.genericRepo.GetPaginationInfo(ctx, s.GetSource(), filteringClause, params)
 }

@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -18,8 +19,8 @@ import (
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type listService interface {
 	GetListRecord(ctx context.Context, listId string) (*models.List, error)
-	GetListsRecords(ctx context.Context, filters *filters.BaseFilters) (*models.ListPage, error)
-	GetCollaborators(ctx context.Context, listId string, filters *filters.BaseFilters) (*models.UserPage, error)
+	GetListsRecords(ctx context.Context, filters filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.ListPage, error)
+	GetCollaborators(ctx context.Context, listId string, filters filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error)
 	GetListOwnerRecord(ctx context.Context, listId string) (*models.User, error)
 	DeleteListRecord(ctx context.Context, listId string) error
 	DeleteLists(ctx context.Context) error
@@ -33,21 +34,21 @@ type fieldValidator interface {
 	Struct(interface{}) error
 }
 
-type handler struct {
+type Handler struct {
 	serv       listService
 	fValidator fieldValidator
 	transact   persistence.Transactioner
 }
 
-func NewHandler(service listService, fValidator fieldValidator, transact persistence.Transactioner) *handler {
-	return &handler{
+func NewHandler(service listService, fValidator fieldValidator, transact persistence.Transactioner) *Handler {
+	return &Handler{
 		serv:       service,
 		fValidator: fValidator,
 		transact:   transact,
 	}
 }
 
-func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting lists from list handler")
 
@@ -66,18 +67,26 @@ func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 	before := utils.GetContentFromUrl(r, constants.BEFORE)
 	last := utils.GetContentFromUrl(r, constants.LAST)
 
+	name := utils.GetContentFromUrl(r, constants.NAME)
+
 	if len(first) == 0 && len(last) == 0 {
 		first = constants.DEFAULT_LIMIT_VALUE
 	}
 
-	lFilter := &filters.BaseFilters{
-		First:  first,
-		Last:   last,
-		After:  after,
-		Before: before,
+	lFilter := &filters.ListFilters{
+		PaginationFilters: filters.PaginationFilters{
+			First:  first,
+			Last:   last,
+			After:  after,
+			Before: before,
+		},
+		Name: name,
 	}
 
-	lists, err := h.serv.GetListsRecords(ctx, lFilter)
+	rf := &resource_identifier.GenericResourceIdentifier{}
+	rf.SetResourceIdentifier(constants.ListIdentifier)
+
+	lists, err := h.serv.GetListsRecords(ctx, lFilter, rf)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get lists in list handler due to an error %s", err.Error())
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
@@ -97,7 +106,7 @@ func (h *handler) HandleGetLists(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting list's collaborators in list handler")
 
@@ -127,14 +136,20 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 		first = constants.DEFAULT_LIMIT_VALUE
 	}
 
-	lFilters := &filters.BaseFilters{
-		First:  first,
-		Last:   last,
-		Before: before,
-		After:  after,
+	lFilters := &filters.UserFilters{
+		PaginationFilters: filters.PaginationFilters{
+			First:  first,
+			Last:   last,
+			Before: before,
+			After:  after,
+		},
+		ListID: listId,
 	}
 
-	collaborators, err := h.serv.GetCollaborators(ctx, listId, lFilters)
+	rf := &resource_identifier.GenericResourceIdentifier{}
+	rf.SetResourceIdentifier(constants.ListsUsersIdentifier)
+
+	collaborators, err := h.serv.GetCollaborators(ctx, listId, lFilters, rf)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get list's collaborators in list handler due to an error %s in list service", err.Error())
 
@@ -155,7 +170,7 @@ func (h *handler) HandleGetCollaborators(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (h *handler) HandleDeleteList(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting list in list handler")
 
@@ -190,7 +205,7 @@ func (h *handler) HandleDeleteList(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleDeleteLists(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteLists(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting lists in list handler")
 
@@ -217,7 +232,7 @@ func (h *handler) HandleDeleteLists(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleCreateList(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleCreateList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("creating list in list handler")
 
@@ -272,7 +287,7 @@ func (h *handler) HandleCreateList(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 }
-func (h *handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("changing list name in list handler")
 
@@ -331,7 +346,7 @@ func (h *handler) HandleUpdateListPartially(w http.ResponseWriter, r *http.Reque
 
 }
 
-func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("adding a collaborator in list handler")
 
@@ -380,7 +395,7 @@ func (h *handler) HandleAddCollaborator(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting collaborator in list handler")
 
@@ -423,7 +438,7 @@ func (h *handler) HandleDeleteCollaborator(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting list record in list handler")
 
@@ -464,7 +479,7 @@ func (h *handler) HandleGetListRecord(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) HandleGetListOwner(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetListOwner(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting list owner in list handler")
 

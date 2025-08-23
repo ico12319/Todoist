@@ -140,7 +140,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		List           func(childComplexity int, id string) int
-		Lists          func(childComplexity int, first *int32, after *string, last *int32, before *string) int
+		Lists          func(childComplexity int, first *int32, after *string, last *int32, before *string, criteria *model.ListFilterInput) int
 		RandomActivity func(childComplexity int) int
 		Todo           func(childComplexity int, id string) int
 		Todos          func(childComplexity int, first *int32, after *string, last *int32, before *string, criteria *model.TodosFilterInput) int
@@ -159,7 +159,7 @@ type ComplexityRoot struct {
 		AssignedTo  func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
 		Description func(childComplexity int) int
-		DueData     func(childComplexity int) int
+		DueDate     func(childComplexity int) int
 		ID          func(childComplexity int) int
 		LastUpdated func(childComplexity int) int
 		List        func(childComplexity int) int
@@ -175,11 +175,11 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
-		AssignedTo    func(childComplexity int, first *int32, after *string, last *int32, before *string, filter *model.TodosFilterInput) int
-		Email         func(childComplexity int) int
-		ID            func(childComplexity int) int
-		ParticipateIn func(childComplexity int, first *int32, after *string, last *int32, before *string) int
-		Role          func(childComplexity int) int
+		AssignedTo func(childComplexity int, first *int32, after *string, last *int32, before *string, filter *model.TodosFilterInput) int
+		Email      func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Owns       func(childComplexity int, first *int32, after *string, last *int32, before *string, filter *model.ListFilterInput) int
+		Role       func(childComplexity int) int
 	}
 
 	UserPage struct {
@@ -211,7 +211,7 @@ type MutationResolver interface {
 	ExchangeRefreshToken(ctx context.Context, input model.RefreshTokenInput) (*model.Access, error)
 }
 type QueryResolver interface {
-	Lists(ctx context.Context, first *int32, after *string, last *int32, before *string) (*model.ListPage, error)
+	Lists(ctx context.Context, first *int32, after *string, last *int32, before *string, criteria *model.ListFilterInput) (*model.ListPage, error)
 	List(ctx context.Context, id string) (*model.List, error)
 	Todos(ctx context.Context, first *int32, after *string, last *int32, before *string, criteria *model.TodosFilterInput) (*model.TodoPage, error)
 	Todo(ctx context.Context, id string) (*model.Todo, error)
@@ -226,7 +226,7 @@ type TodoResolver interface {
 }
 type UserResolver interface {
 	AssignedTo(ctx context.Context, obj *model.User, first *int32, after *string, last *int32, before *string, filter *model.TodosFilterInput) (*model.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *model.User, first *int32, after *string, last *int32, before *string) (*model.ListPage, error)
+	Owns(ctx context.Context, obj *model.User, first *int32, after *string, last *int32, before *string, filter *model.ListFilterInput) (*model.ListPage, error)
 }
 
 type executableSchema struct {
@@ -304,7 +304,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteCollaboratorPayload.UserEmail(childComplexity), true
 
-	case "DeleteListPayload.created_at":
+	case "DeleteListPayload.createdAt":
 		if e.complexity.DeleteListPayload.CreatedAt == nil {
 			break
 		}
@@ -325,7 +325,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.DeleteListPayload.ID(childComplexity), true
 
-	case "DeleteListPayload.last_updated":
+	case "DeleteListPayload.lastUpdated":
 		if e.complexity.DeleteListPayload.LastUpdated == nil {
 			break
 		}
@@ -727,7 +727,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Lists(childComplexity, args["first"].(*int32), args["after"].(*string), args["last"].(*int32), args["before"].(*string)), true
+		return e.complexity.Query.Lists(childComplexity, args["first"].(*int32), args["after"].(*string), args["last"].(*int32), args["before"].(*string), args["criteria"].(*model.ListFilterInput)), true
 
 	case "Query.randomActivity":
 		if e.complexity.Query.RandomActivity == nil {
@@ -833,12 +833,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Todo.Description(childComplexity), true
 
-	case "Todo.dueData":
-		if e.complexity.Todo.DueData == nil {
+	case "Todo.dueDate":
+		if e.complexity.Todo.DueDate == nil {
 			break
 		}
 
-		return e.complexity.Todo.DueData(childComplexity), true
+		return e.complexity.Todo.DueDate(childComplexity), true
 
 	case "Todo.id":
 		if e.complexity.Todo.ID == nil {
@@ -929,17 +929,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.User.ID(childComplexity), true
 
-	case "User.participateIn":
-		if e.complexity.User.ParticipateIn == nil {
+	case "User.owns":
+		if e.complexity.User.Owns == nil {
 			break
 		}
 
-		args, err := ec.field_User_participateIn_args(ctx, rawArgs)
+		args, err := ec.field_User_owns_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.User.ParticipateIn(childComplexity, args["first"].(*int32), args["after"].(*string), args["last"].(*int32), args["before"].(*string)), true
+		return e.complexity.User.Owns(childComplexity, args["first"].(*int32), args["after"].(*string), args["last"].(*int32), args["before"].(*string), args["filter"].(*model.ListFilterInput)), true
 
 	case "User.role":
 		if e.complexity.User.Role == nil {
@@ -980,6 +980,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCollaboratorInput,
 		ec.unmarshalInputCreateListInput,
 		ec.unmarshalInputCreateTodoInput,
+		ec.unmarshalInputListFilterInput,
 		ec.unmarshalInputRefreshTokenInput,
 		ec.unmarshalInputTodosFilterInput,
 		ec.unmarshalInputUpdateListInput,
@@ -1649,6 +1650,11 @@ func (ec *executionContext) field_Query_lists_args(ctx context.Context, rawArgs 
 		return nil, err
 	}
 	args["before"] = arg3
+	arg4, err := ec.field_Query_lists_argsCriteria(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["criteria"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Query_lists_argsFirst(
@@ -1700,6 +1706,19 @@ func (ec *executionContext) field_Query_lists_argsBefore(
 	}
 
 	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_lists_argsCriteria(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.ListFilterInput, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("criteria"))
+	if tmp, ok := rawArgs["criteria"]; ok {
+		return ec.unmarshalOListFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐListFilterInput(ctx, tmp)
+	}
+
+	var zeroVal *model.ListFilterInput
 	return zeroVal, nil
 }
 
@@ -2016,32 +2035,37 @@ func (ec *executionContext) field_User_assignedTo_argsFilter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participateIn_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_User_owns_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_User_participateIn_argsFirst(ctx, rawArgs)
+	arg0, err := ec.field_User_owns_argsFirst(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["first"] = arg0
-	arg1, err := ec.field_User_participateIn_argsAfter(ctx, rawArgs)
+	arg1, err := ec.field_User_owns_argsAfter(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["after"] = arg1
-	arg2, err := ec.field_User_participateIn_argsLast(ctx, rawArgs)
+	arg2, err := ec.field_User_owns_argsLast(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["last"] = arg2
-	arg3, err := ec.field_User_participateIn_argsBefore(ctx, rawArgs)
+	arg3, err := ec.field_User_owns_argsBefore(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["before"] = arg3
+	arg4, err := ec.field_User_owns_argsFilter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg4
 	return args, nil
 }
-func (ec *executionContext) field_User_participateIn_argsFirst(
+func (ec *executionContext) field_User_owns_argsFirst(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*int32, error) {
@@ -2054,7 +2078,7 @@ func (ec *executionContext) field_User_participateIn_argsFirst(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participateIn_argsAfter(
+func (ec *executionContext) field_User_owns_argsAfter(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*string, error) {
@@ -2067,7 +2091,7 @@ func (ec *executionContext) field_User_participateIn_argsAfter(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participateIn_argsLast(
+func (ec *executionContext) field_User_owns_argsLast(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*int32, error) {
@@ -2080,7 +2104,7 @@ func (ec *executionContext) field_User_participateIn_argsLast(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_User_participateIn_argsBefore(
+func (ec *executionContext) field_User_owns_argsBefore(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*string, error) {
@@ -2090,6 +2114,19 @@ func (ec *executionContext) field_User_participateIn_argsBefore(
 	}
 
 	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_User_owns_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*model.ListFilterInput, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOListFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐListFilterInput(ctx, tmp)
+	}
+
+	var zeroVal *model.ListFilterInput
 	return zeroVal, nil
 }
 
@@ -2384,8 +2421,8 @@ func (ec *executionContext) fieldContext_CreateCollaboratorPayload_user(_ contex
 				return ec.fieldContext_User_role(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_User_assignedTo(ctx, field)
-			case "participateIn":
-				return ec.fieldContext_User_participateIn(ctx, field)
+			case "owns":
+				return ec.fieldContext_User_owns(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -2739,8 +2776,8 @@ func (ec *executionContext) fieldContext_DeleteListPayload_description(_ context
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteListPayload_created_at(ctx context.Context, field graphql.CollectedField, obj *model.DeleteListPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteListPayload_created_at(ctx, field)
+func (ec *executionContext) _DeleteListPayload_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.DeleteListPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteListPayload_createdAt(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2767,7 +2804,7 @@ func (ec *executionContext) _DeleteListPayload_created_at(ctx context.Context, f
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteListPayload_created_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteListPayload_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteListPayload",
 		Field:      field,
@@ -2780,8 +2817,8 @@ func (ec *executionContext) fieldContext_DeleteListPayload_created_at(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteListPayload_last_updated(ctx context.Context, field graphql.CollectedField, obj *model.DeleteListPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteListPayload_last_updated(ctx, field)
+func (ec *executionContext) _DeleteListPayload_lastUpdated(ctx context.Context, field graphql.CollectedField, obj *model.DeleteListPayload) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteListPayload_lastUpdated(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2808,7 +2845,7 @@ func (ec *executionContext) _DeleteListPayload_last_updated(ctx context.Context,
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteListPayload_last_updated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteListPayload_lastUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DeleteListPayload",
 		Field:      field,
@@ -3633,8 +3670,8 @@ func (ec *executionContext) fieldContext_List_owner(_ context.Context, field gra
 				return ec.fieldContext_User_role(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_User_assignedTo(ctx, field)
-			case "participateIn":
-				return ec.fieldContext_User_participateIn(ctx, field)
+			case "owns":
+				return ec.fieldContext_User_owns(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -4244,10 +4281,10 @@ func (ec *executionContext) fieldContext_Mutation_deleteList(ctx context.Context
 				return ec.fieldContext_DeleteListPayload_name(ctx, field)
 			case "description":
 				return ec.fieldContext_DeleteListPayload_description(ctx, field)
-			case "created_at":
-				return ec.fieldContext_DeleteListPayload_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_DeleteListPayload_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_DeleteListPayload_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_DeleteListPayload_lastUpdated(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeleteListPayload", field.Name)
 		},
@@ -4313,10 +4350,10 @@ func (ec *executionContext) fieldContext_Mutation_deleteLists(_ context.Context,
 				return ec.fieldContext_DeleteListPayload_name(ctx, field)
 			case "description":
 				return ec.fieldContext_DeleteListPayload_description(ctx, field)
-			case "created_at":
-				return ec.fieldContext_DeleteListPayload_created_at(ctx, field)
-			case "last_updated":
-				return ec.fieldContext_DeleteListPayload_last_updated(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_DeleteListPayload_createdAt(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_DeleteListPayload_lastUpdated(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeleteListPayload", field.Name)
 		},
@@ -4381,8 +4418,8 @@ func (ec *executionContext) fieldContext_Mutation_createTodo(ctx context.Context
 				return ec.fieldContext_Todo_priority(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_Todo_assignedTo(ctx, field)
-			case "dueData":
-				return ec.fieldContext_Todo_dueData(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_Todo_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -4597,8 +4634,8 @@ func (ec *executionContext) fieldContext_Mutation_updateTodo(ctx context.Context
 				return ec.fieldContext_Todo_priority(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_Todo_assignedTo(ctx, field)
-			case "dueData":
-				return ec.fieldContext_Todo_dueData(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_Todo_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -5062,7 +5099,7 @@ func (ec *executionContext) _Query_lists(ctx context.Context, field graphql.Coll
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Lists(rctx, fc.Args["first"].(*int32), fc.Args["after"].(*string), fc.Args["last"].(*int32), fc.Args["before"].(*string))
+		return ec.resolvers.Query().Lists(rctx, fc.Args["first"].(*int32), fc.Args["after"].(*string), fc.Args["last"].(*int32), fc.Args["before"].(*string), fc.Args["criteria"].(*model.ListFilterInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5298,8 +5335,8 @@ func (ec *executionContext) fieldContext_Query_todo(ctx context.Context, field g
 				return ec.fieldContext_Todo_priority(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_Todo_assignedTo(ctx, field)
-			case "dueData":
-				return ec.fieldContext_Todo_dueData(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_Todo_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -5425,8 +5462,8 @@ func (ec *executionContext) fieldContext_Query_user(ctx context.Context, field g
 				return ec.fieldContext_User_role(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_User_assignedTo(ctx, field)
-			case "participateIn":
-				return ec.fieldContext_User_participateIn(ctx, field)
+			case "owns":
+				return ec.fieldContext_User_owns(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -6220,8 +6257,8 @@ func (ec *executionContext) fieldContext_Todo_assignedTo(_ context.Context, fiel
 				return ec.fieldContext_User_role(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_User_assignedTo(ctx, field)
-			case "participateIn":
-				return ec.fieldContext_User_participateIn(ctx, field)
+			case "owns":
+				return ec.fieldContext_User_owns(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -6229,8 +6266,8 @@ func (ec *executionContext) fieldContext_Todo_assignedTo(_ context.Context, fiel
 	return fc, nil
 }
 
-func (ec *executionContext) _Todo_dueData(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Todo_dueData(ctx, field)
+func (ec *executionContext) _Todo_dueDate(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Todo_dueDate(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6243,7 +6280,7 @@ func (ec *executionContext) _Todo_dueData(ctx context.Context, field graphql.Col
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.DueData, nil
+		return obj.DueDate, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6257,7 +6294,7 @@ func (ec *executionContext) _Todo_dueData(ctx context.Context, field graphql.Col
 	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Todo_dueData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Todo_dueDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Todo",
 		Field:      field,
@@ -6327,8 +6364,8 @@ func (ec *executionContext) fieldContext_TodoPage_data(_ context.Context, field 
 				return ec.fieldContext_Todo_priority(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_Todo_assignedTo(ctx, field)
-			case "dueData":
-				return ec.fieldContext_Todo_dueData(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_Todo_dueDate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Todo", field.Name)
 		},
@@ -6645,8 +6682,8 @@ func (ec *executionContext) fieldContext_User_assignedTo(ctx context.Context, fi
 	return fc, nil
 }
 
-func (ec *executionContext) _User_participateIn(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_User_participateIn(ctx, field)
+func (ec *executionContext) _User_owns(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_User_owns(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6659,7 +6696,7 @@ func (ec *executionContext) _User_participateIn(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().ParticipateIn(rctx, obj, fc.Args["first"].(*int32), fc.Args["after"].(*string), fc.Args["last"].(*int32), fc.Args["before"].(*string))
+		return ec.resolvers.User().Owns(rctx, obj, fc.Args["first"].(*int32), fc.Args["after"].(*string), fc.Args["last"].(*int32), fc.Args["before"].(*string), fc.Args["filter"].(*model.ListFilterInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6676,7 +6713,7 @@ func (ec *executionContext) _User_participateIn(ctx context.Context, field graph
 	return ec.marshalNListPage2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐListPage(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_User_participateIn(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_User_owns(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "User",
 		Field:      field,
@@ -6701,7 +6738,7 @@ func (ec *executionContext) fieldContext_User_participateIn(ctx context.Context,
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_User_participateIn_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_User_owns_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -6755,8 +6792,8 @@ func (ec *executionContext) fieldContext_UserPage_data(_ context.Context, field 
 				return ec.fieldContext_User_role(ctx, field)
 			case "assignedTo":
 				return ec.fieldContext_User_assignedTo(ctx, field)
-			case "participateIn":
-				return ec.fieldContext_User_participateIn(ctx, field)
+			case "owns":
+				return ec.fieldContext_User_owns(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -8940,6 +8977,33 @@ func (ec *executionContext) unmarshalInputCreateTodoInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputListFilterInput(ctx context.Context, obj any) (model.ListFilterInput, error) {
+	var it model.ListFilterInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRefreshTokenInput(ctx context.Context, obj any) (model.RefreshTokenInput, error) {
 	var it model.RefreshTokenInput
 	asMap := map[string]any{}
@@ -8974,7 +9038,7 @@ func (ec *executionContext) unmarshalInputTodosFilterInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"status", "priority", "type"}
+	fieldsInOrder := [...]string{"status", "priority", "type", "name"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9002,6 +9066,13 @@ func (ec *executionContext) unmarshalInputTodosFilterInput(ctx context.Context, 
 				return it, err
 			}
 			it.Type = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
 		}
 	}
 
@@ -9330,10 +9401,10 @@ func (ec *executionContext) _DeleteListPayload(ctx context.Context, sel ast.Sele
 			out.Values[i] = ec._DeleteListPayload_name(ctx, field, obj)
 		case "description":
 			out.Values[i] = ec._DeleteListPayload_description(ctx, field, obj)
-		case "created_at":
-			out.Values[i] = ec._DeleteListPayload_created_at(ctx, field, obj)
-		case "last_updated":
-			out.Values[i] = ec._DeleteListPayload_last_updated(ctx, field, obj)
+		case "createdAt":
+			out.Values[i] = ec._DeleteListPayload_createdAt(ctx, field, obj)
+		case "lastUpdated":
+			out.Values[i] = ec._DeleteListPayload_lastUpdated(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10234,8 +10305,8 @@ func (ec *executionContext) _Todo(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-		case "dueData":
-			out.Values[i] = ec._Todo_dueData(ctx, field, obj)
+		case "dueDate":
+			out.Values[i] = ec._Todo_dueDate(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10364,7 +10435,7 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-		case "participateIn":
+		case "owns":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -10373,7 +10444,7 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._User_participateIn(ctx, field, obj)
+				res = ec._User_owns(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -11704,6 +11775,14 @@ func (ec *executionContext) marshalOList2ᚖTodoᚑListᚋinternProjectᚋgraph�
 		return graphql.Null
 	}
 	return ec._List(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOListFilterInput2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐListFilterInput(ctx context.Context, v any) (*model.ListFilterInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputListFilterInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOPageInfo2ᚖTodoᚑListᚋinternProjectᚋgraphᚋmodelᚐPageInfo(ctx context.Context, sel ast.SelectionSet, v *model.PageInfo) graphql.Marshaler {

@@ -57,8 +57,8 @@ type DeleteListPayload struct {
 	ID          string     `json:"id"`
 	Name        *string    `json:"name,omitempty"`
 	Description *string    `json:"description,omitempty"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
-	LastUpdated *time.Time `json:"last_updated,omitempty"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	LastUpdated *time.Time `json:"lastUpdated,omitempty"`
 }
 
 type DeleteTodoPayload struct {
@@ -89,6 +89,10 @@ type List struct {
 	Owner         *User     `json:"owner"`
 	Todos         *TodoPage `json:"todos"`
 	Collaborators *UserPage `json:"collaborators"`
+}
+
+type ListFilterInput struct {
+	Name *string `json:"name,omitempty"`
 }
 
 type ListPage struct {
@@ -135,7 +139,7 @@ type Todo struct {
 	LastUpdated time.Time  `json:"lastUpdated"`
 	Priority    Priority   `json:"priority"`
 	AssignedTo  *User      `json:"assignedTo,omitempty"`
-	DueData     *time.Time `json:"dueData,omitempty"`
+	DueDate     *time.Time `json:"dueDate,omitempty"`
 }
 
 type TodoPage struct {
@@ -152,6 +156,7 @@ type TodosFilterInput struct {
 	Status   *TodoStatus `json:"status,omitempty"`
 	Priority *Priority   `json:"priority,omitempty"`
 	Type     *TodoType   `json:"type,omitempty"`
+	Name     *string     `json:"name,omitempty"`
 }
 
 type UpdateListInput struct {
@@ -169,11 +174,11 @@ type UpdateTodoInput struct {
 }
 
 type User struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	Role          *UserRole `json:"role,omitempty"`
-	AssignedTo    *TodoPage `json:"assignedTo"`
-	ParticipateIn *ListPage `json:"participateIn"`
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	Role       *UserRole `json:"role,omitempty"`
+	AssignedTo *TodoPage `json:"assignedTo"`
+	Owns       *ListPage `json:"owns"`
 }
 
 type UserPage struct {

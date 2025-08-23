@@ -12,6 +12,10 @@ func NewPriorityConverter() *priorityConverter {
 }
 
 func (*priorityConverter) ToStringPriority(priority *gql.Priority) string {
+	if priority == nil {
+		return ""
+	}
+
 	ptrValue := *priority
 
 	if ptrValue == gql.PriorityVeryLow {

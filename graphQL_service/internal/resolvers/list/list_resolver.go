@@ -76,7 +76,7 @@ func NewResolver(lConverter listConverter, uConverter userConverter, tConverter 
 	}
 }
 
-func (r *resolver) Lists(ctx context.Context, filter *url_filters.BaseFilters) (*gql.ListPage, error) {
+func (r *resolver) Lists(ctx context.Context, filter *url_filters.ListFilters) (*gql.ListPage, error) {
 	log.C(ctx).Debugf("getting lists in list resolver")
 
 	decorator := r.factory.CreateUrlDecorator(ctx, gql_constants.LISTS_PATH, filter)

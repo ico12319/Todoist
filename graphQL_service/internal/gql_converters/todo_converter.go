@@ -32,7 +32,7 @@ func (*todoConverter) ToGQL(todo *models.Todo) *gql.Todo {
 		CreatedAt:   todo.CreatedAt,
 		LastUpdated: todo.LastUpdated,
 		Priority:    gql.Priority(todo.Priority),
-		DueData:     todo.DueDate,
+		DueDate:     todo.DueDate,
 	}
 }
 
@@ -109,7 +109,7 @@ func (*todoConverter) FromGQLModelToDeleteTodoPayload(todo *gql.Todo, success bo
 		Priority:    &todo.Priority,
 		CreatedAt:   &todo.CreatedAt,
 		LastUpdated: &todo.LastUpdated,
-		DueDate:     todo.DueData,
+		DueDate:     todo.DueDate,
 	}
 }
 

@@ -12,6 +12,10 @@ func NewStatusConverter() *statusConverter {
 }
 
 func (*statusConverter) ToStringStatus(status *gql.TodoStatus) string {
+	if status == nil {
+		return ""
+	}
+
 	ptrValue := *status
 
 	if ptrValue == gql.TodoStatusOpen {

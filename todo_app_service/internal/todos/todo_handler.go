@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	middlewares2 "Todo-List/internProject/todo_app_service/internal/middlewares"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -18,8 +19,8 @@ import (
 //go:generate mockery --name=IService --output=./mocks --outpkg=mocks --filename=Iservice.go --with-expecter=true
 type todoService interface {
 	CreateTodoRecord(ctx context.Context, todo *handler_models.CreateTodo, creator *models.User) (*models.Todo, error)
-	GetTodoRecords(ctx context.Context, filters *filters.TodoFilters) (*models.TodoPage, error)
-	GetTodosByListId(ctx context.Context, filters *filters.TodoFilters, listId string) (*models.TodoPage, error)
+	GetTodoRecords(ctx context.Context, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.TodoPage, error)
+	GetTodosByListId(ctx context.Context, f filters.SqlFilters, listId string, rf resource_identifier.ResourceIdentifier) (*models.TodoPage, error)
 	GetTodoByListId(ctx context.Context, listId string, todoId string) (*models.Todo, error)
 	GetTodoRecord(ctx context.Context, todoId string) (*models.Todo, error)
 	GetTodoAssigneeToRecord(ctx context.Context, todoId string) (*models.User, error)
@@ -32,21 +33,21 @@ type todoService interface {
 type fieldsValidator interface {
 	Struct(st interface{}) error
 }
-type handler struct {
+type Handler struct {
 	serv       todoService
 	fValidator fieldsValidator
 	transact   persistence.Transactioner
 }
 
-func NewHandler(serv todoService, fValidator fieldsValidator, transact persistence.Transactioner) *handler {
-	return &handler{
+func NewHandler(serv todoService, fValidator fieldsValidator, transact persistence.Transactioner) *Handler {
+	return &Handler{
 		serv:       serv,
 		fValidator: fValidator,
 		transact:   transact,
 	}
 }
 
-func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo assignee in todo handler")
 
@@ -87,7 +88,7 @@ func (h *handler) HandleGetTodoAssignee(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (h *handler) HandleTodoCreation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleTodoCreation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	tx, err := h.transact.BeginContext(ctx)
@@ -139,7 +140,7 @@ func (h *handler) HandleTodoCreation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo in todo handler")
 
@@ -155,7 +156,7 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 
 	status := utils.GetContentFromUrl(r, constants.STATUS)
 	priority := utils.GetContentFromUrl(r, constants.PRIORITY)
-
+	name := utils.GetContentFromUrl(r, constants.NAME)
 	first := utils.GetContentFromUrl(r, constants.FIRST)
 	after := utils.GetContentFromUrl(r, constants.AFTER)
 	before := utils.GetContentFromUrl(r, constants.BEFORE)
@@ -168,7 +169,7 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 	overdue := utils.GetContentFromUrl(r, constants.OVERDUE)
 
 	tFilter := &filters.TodoFilters{
-		BaseFilters: filters.BaseFilters{
+		PaginationFilters: filters.PaginationFilters{
 			First:  first,
 			Last:   last,
 			After:  after,
@@ -177,9 +178,13 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 		Status:   status,
 		Priority: priority,
 		Overdue:  overdue,
+		Name:     name,
 	}
 
-	todos, err := h.serv.GetTodoRecords(ctx, tFilter)
+	resourceIdentifier := &resource_identifier.GenericResourceIdentifier{}
+	resourceIdentifier.SetResourceIdentifier(constants.TodosIdentifier)
+
+	todos, err := h.serv.GetTodoRecords(ctx, tFilter, resourceIdentifier)
 	if err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -197,7 +202,7 @@ func (h *handler) HandleGetTodos(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) HandleDeleteTodo(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("deleting todo in todo handler")
 
@@ -231,7 +236,7 @@ func (h *handler) HandleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("updating todo in todo handler")
 
@@ -288,7 +293,7 @@ func (h *handler) HandleUpdateTodoRecord(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo in todo handler")
 
@@ -329,7 +334,7 @@ func (h *handler) HandleGetTodo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) HandleDeleteTodos(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteTodos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("deleting todos in todo handler")
 
@@ -357,7 +362,7 @@ func (h *handler) HandleDeleteTodos(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("getting todos by list_id in todo handler")
 
@@ -393,9 +398,11 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 
 	status := utils.GetContentFromUrl(r, constants.STATUS)
 	priority := utils.GetContentFromUrl(r, constants.PRIORITY)
+	name := utils.GetContentFromUrl(r, constants.NAME)
+	overdue := utils.GetContentFromUrl(r, constants.OVERDUE)
 
 	f := &filters.TodoFilters{
-		BaseFilters: filters.BaseFilters{
+		PaginationFilters: filters.PaginationFilters{
 			First:  first,
 			After:  after,
 			Before: before,
@@ -403,9 +410,15 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 		},
 		Status:   status,
 		Priority: priority,
+		ListID:   listId,
+		Name:     name,
+		Overdue:  overdue,
 	}
 
-	todos, err := h.serv.GetTodosByListId(ctx, f, listId)
+	resourceIdentifier := &resource_identifier.GenericResourceIdentifier{}
+	resourceIdentifier.SetResourceIdentifier(constants.TodosIdentifier)
+
+	todos, err := h.serv.GetTodosByListId(ctx, f, listId, resourceIdentifier)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get todos by list_id, error in todo service")
 		utils.EncodeErrorWithCorrectStatusCode(w, err)
@@ -424,7 +437,7 @@ func (h *handler) HandleGetTodosByListId(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (h *handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Debug("deleting todos by list_id in todo handler")
 
@@ -461,7 +474,7 @@ func (h *handler) HandleDeleteTodosByListId(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) HandleGetTodoByListId(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleGetTodoByListId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log.C(ctx).Info("getting todo from list in todo handler")
 

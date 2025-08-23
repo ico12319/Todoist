@@ -206,7 +206,7 @@ func (r *resolver) AssignedTo(ctx context.Context, obj *gql.User, filters *url_f
 	return r.tConverter.ToTodoPageGQL(&todoPage), nil
 }
 
-func (r *resolver) ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error) {
+func (r *resolver) Owns(ctx context.Context, obj *gql.User, filters *url_filters.ListFilters) (*gql.ListPage, error) {
 	log.C(ctx).Infof("getting lists shared with user with id %s", obj.ID)
 
 	formattedSuffix := fmt.Sprintf("/%s", obj.ID)

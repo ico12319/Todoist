@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/resource_identifier"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	"Todo-List/internProject/todo_app_service/internal/utils"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -21,7 +22,7 @@ var UserRoleKey = userRoleKey{}
 
 type listService interface {
 	GetListRecord(context.Context, string) (*models.List, error)
-	GetCollaborators(context.Context, string, *filters.BaseFilters) (*models.UserPage, error)
+	GetCollaborators(ctx context.Context, listId string, f filters.SqlFilters, rf resource_identifier.ResourceIdentifier) (*models.UserPage, error)
 }
 
 type listModifyMiddleware struct {
@@ -82,7 +83,10 @@ func (a *listModifyMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	authUsersPage, err := a.serv.GetCollaborators(ctx, listId, &filters.BaseFilters{})
+	rf := &resource_identifier.GenericResourceIdentifier{}
+	rf.SetResourceIdentifier(constants.ListsUsersIdentifier)
+
+	authUsersPage, err := a.serv.GetCollaborators(ctx, listId, &filters.UserFilters{ListID: listId}, rf)
 	if err != nil {
 		utils.EncodeError(w, err.Error(), http.StatusInternalServerError)
 		return

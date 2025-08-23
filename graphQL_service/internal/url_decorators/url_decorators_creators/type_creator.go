@@ -17,7 +17,6 @@ func (*typeCreator) Create(ctx context.Context, inner url_decorators.QueryParams
 	log.C(ctx).Info("creating status url decorator in status creator")
 
 	tType, containsType := uFilters.GetFilters()[gql_constants.TYPE]
-
 	if containsType && tType != nil {
 		log.C(ctx).Info("successfully creating type url decorator in status creator")
 		inner = url_decorators.NewCriteriaDecorator(inner, gql_constants.TYPE, *tType)

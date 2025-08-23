@@ -3,6 +3,7 @@ package helpers
 import (
 	gql "Todo-List/internProject/graphQL_service/graph/model"
 	"Todo-List/internProject/graphQL_service/internal/gql_constants"
+	"Todo-List/internProject/graphQL_service/internal/gql_converters"
 	"Todo-List/internProject/graphQL_service/internal/url_decorators/url_filters"
 	"strconv"
 )
@@ -41,15 +42,16 @@ func InitBaseFilters(first *int32, after *string, last *int32, before *string) *
 }
 
 func InitTodoFilters(first *int32, after *string, last *int32, before *string, tFilters *gql.TodosFilterInput) *url_filters.TodoFilters {
-	preparedFirst, preparedLast := ExtractLastAndFirstPointers(first, last)
+	statusConverter := gql_converters.NewStatusConverter()
+	priorityConverter := gql_converters.NewPriorityConverter()
+	typeConverter := gql_converters.NewOverdueConverter()
+	bFilters := InitBaseFilters(first, after, last, before)
 
-	return &url_filters.TodoFilters{
-		BaseFilters: url_filters.BaseFilters{
-			First:  preparedFirst,
-			Last:   preparedLast,
-			After:  after,
-			Before: before,
-		},
-		TodoFilters: tFilters,
-	}
+	return url_filters.NewTodoFilters(*bFilters, tFilters, statusConverter, priorityConverter, typeConverter)
+}
+
+func InitListFilters(first *int32, after *string, last *int32, before *string, lFilters *gql.ListFilterInput) *url_filters.ListFilters {
+	bFilters := InitBaseFilters(first, after, last, before)
+
+	return url_filters.NewListFilters(*bFilters, lFilters)
 }

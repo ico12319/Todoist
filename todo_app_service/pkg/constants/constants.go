@@ -1,24 +1,27 @@
 package constants
 
 type TodoStatus string
-
-const (
-	Done       TodoStatus = "done"
-	InProgress TodoStatus = "in progress"
-	Open       TodoStatus = "open"
-)
-
 type Priority string
+type UserRole string
 
 const (
-	VeryLow  Priority = "very low"
-	Low      Priority = "low"
-	Medium   Priority = "priority"
-	High     Priority = "high"
-	VeryHigh Priority = "very high"
+	ListIdentifier       = "lists"
+	TodosIdentifier      = "todos"
+	UsersIdentifier      = "users"
+	ListsUsersIdentifier = "lists users"
+	UsersTodosIdentifier = "user todos"
+	UsersListsIdentifier = "user lists"
 )
 
-type UserRole string
+// adapted
+const (
+	TodosSQLTableName           = "todos"
+	ListsSQLTableName           = "lists"
+	UsersSQLTableName           = "users"
+	ListsCollaboratorsTableName = "lists_collaborators"
+	UserListsTableName          = "lists_and_users"
+	UserTodosTableName          = "user_todos"
+)
 
 const (
 	Admin  UserRole = "admin"
@@ -29,7 +32,6 @@ const (
 const CONTENT_TYPE = "application/json"
 
 const INVALID_REQUEST_BODY = "invalid request body"
-const DESCRIPTION_EMPTY = "description can't be empty"
 
 const CONTEXT_NOT_CONTAINING_VALID_LIST_ID = "internal error: request context does not contain a valid list ID"
 const CONTEXT_NOT_CONTAINING_VALID_TODO_ID = "internal error: request context does not contain a valid todo ID"

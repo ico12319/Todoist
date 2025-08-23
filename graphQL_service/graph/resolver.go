@@ -11,7 +11,7 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require here.
 
 type lResolver interface {
-	Lists(ctx context.Context, filter *url_filters.BaseFilters) (*gql.ListPage, error)
+	Lists(ctx context.Context, filter *url_filters.ListFilters) (*gql.ListPage, error)
 	List(ctx context.Context, id string) (*gql.List, error)
 	ListOwner(ctx context.Context, obj *gql.List) (*gql.User, error)
 	Todos(ctx context.Context, obj *gql.List, filters *url_filters.TodoFilters) (*gql.TodoPage, error)
@@ -42,7 +42,7 @@ type uResolver interface {
 	DeleteUser(ctx context.Context, id string) (*gql.DeleteUserPayload, error)
 	DeleteUsers(ctx context.Context) ([]*gql.DeleteUserPayload, error)
 	AssignedTo(ctx context.Context, obj *gql.User, baseFilters *url_filters.TodoFilters) (*gql.TodoPage, error)
-	ParticipateIn(ctx context.Context, obj *gql.User, filters *url_filters.BaseFilters) (*gql.ListPage, error)
+	Owns(ctx context.Context, obj *gql.User, filters *url_filters.ListFilters) (*gql.ListPage, error)
 }
 
 type aResolver interface {

@@ -4,6 +4,7 @@ import (
 	"Todo-List/internProject/todo_app_service/internal/application_errors"
 	"Todo-List/internProject/todo_app_service/internal/entities"
 	"Todo-List/internProject/todo_app_service/internal/persistence"
+	"Todo-List/internProject/todo_app_service/internal/source"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators"
 	"Todo-List/internProject/todo_app_service/internal/sql_query_decorators/filters"
 	log "Todo-List/internProject/todo_app_service/pkg/configuration"
@@ -34,11 +35,19 @@ func NewRepo(genericRepo genericRepository, factory sqlDecoratorFactory) *reposi
 	}
 }
 
-func (r *repository) GetTodos(ctx context.Context, f *filters.TodoFilters) ([]entities.Todo, error) {
+func (r *repository) GetTodos(ctx context.Context, f filters.SqlFilters) ([]entities.Todo, error) {
 	log.C(ctx).Info("getting all todos in todo repository")
+
+	persist, err := persistence.FromCtx(ctx)
+	if err != nil {
+		log.C(ctx).Errorf("failed to get persistence from context in todo repo, error %s", err.Error())
+		return nil, err
+	}
 
 	baseQuery := `SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority, COUNT(*) OVER() AS total_count
 FROM todos`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
 
 	decorator, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
@@ -50,14 +59,8 @@ FROM todos`
 	completeSqlQuery := fmt.Sprintf(`SELECT id,name,description,list_id,status,created_at,
        last_updated,assigned_to,due_date,priority FROM (%s) ORDER BY id`, sqlQuery)
 
-	persist, err := persistence.FromCtx(ctx)
-	if err != nil {
-		log.C(ctx).Errorf("failed to get persistence from context in todo repo, error %s", err.Error())
-		return nil, err
-	}
-
 	var todos []entities.Todo
-	if err = persist.SelectContext(ctx, &todos, completeSqlQuery); err != nil {
+	if err = persist.SelectContext(ctx, &todos, completeSqlQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to get todos due to a database error %s", err.Error())
 		return nil, err
 	}
@@ -227,7 +230,7 @@ WHERE todos.id = $1`
 	return user, nil
 }
 
-func (r *repository) GetTodosByListId(ctx context.Context, listId string, f *filters.TodoFilters) ([]entities.Todo, error) {
+func (r *repository) GetTodosByListId(ctx context.Context, listId string, f filters.SqlFilters) ([]entities.Todo, error) {
 	log.C(ctx).Infof("getting todos of list with id %s", listId)
 
 	persist, err := persistence.FromCtx(ctx)
@@ -236,7 +239,9 @@ func (r *repository) GetTodosByListId(ctx context.Context, listId string, f *fil
 		return nil, err
 	}
 
-	baseQuery := `SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM todos WHERE list_id = $1`
+	baseQuery := `SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM todos`
+	filteringClause, params := f.BuildSQLFiltering()
+	baseQuery += filteringClause
 
 	decorator, err := r.factory.CreateSqlDecorator(ctx, f, baseQuery)
 	if err != nil {
@@ -245,11 +250,10 @@ func (r *repository) GetTodosByListId(ctx context.Context, listId string, f *fil
 	}
 
 	sqlQueryString := decorator.DetermineCorrectSqlQuery(ctx)
-
 	completeSqlQuery := fmt.Sprintf(`SELECT id,name,description,list_id,status,created_at,last_updated,assigned_to,due_date,priority FROM (%s) ORDER BY id`, sqlQueryString)
 
 	var todos []entities.Todo
-	if err = persist.SelectContext(ctx, &todos, completeSqlQuery, listId); err != nil {
+	if err = persist.SelectContext(ctx, &todos, completeSqlQuery, params...); err != nil {
 		log.C(ctx).Errorf("failed to get todos of list with id %s, error when trying to execute sql query", listId)
 		return nil, err
 	}
@@ -301,14 +305,9 @@ WHERE assigned_to = $1 AND list_id = $2`
 	return nil
 }
 
-func (r *repository) GetTodosPaginationInfo(ctx context.Context) (*entities.PaginationInfo, error) {
+func (r *repository) GetPaginationInfo(ctx context.Context, f filters.SqlFilters, s source.Source) (*entities.PaginationInfo, error) {
 	log.C(ctx).Info("getting todos pagination info in todo repository")
 
-	return r.genericRepo.GetPaginationInfo(ctx, "todos", "TRUE", nil)
-}
-
-func (r *repository) GetTodosFromListPaginationInfo(ctx context.Context, listID string) (*entities.PaginationInfo, error) {
-	log.C(ctx).Infof("getting todo from list with id %s in todo repository", listID)
-
-	return r.genericRepo.GetPaginationInfo(ctx, "todos", `list_id = $1`, []interface{}{listID})
+	filter, params := f.BuildSQLFiltering()
+	return r.genericRepo.GetPaginationInfo(ctx, s.GetSource(), filter, params)
 }

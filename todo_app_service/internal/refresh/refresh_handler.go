@@ -21,21 +21,21 @@ type httpService interface {
 	SetCookie(w http.ResponseWriter, cookie *http.Cookie)
 }
 
-type handler struct {
+type Handler struct {
 	issuer   jwtIssuer
 	service  httpService
 	transact persistence.Transactioner
 }
 
-func NewHandler(issuer jwtIssuer, service httpService, transact persistence.Transactioner) *handler {
-	return &handler{
+func NewHandler(issuer jwtIssuer, service httpService, transact persistence.Transactioner) *Handler {
+	return &Handler{
 		issuer:   issuer,
 		service:  service,
 		transact: transact,
 	}
 }
 
-func (h *handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	tx, err := h.transact.BeginContext(ctx)
