@@ -103,11 +103,7 @@ func (s *service) GetListsRecords(ctx context.Context, f filters.SqlFilters, rf 
 		return nil, err
 	}
 
-	adaptedRf := s.rfAdapter.AdaptResourceIdentifier(rf)
-	sqlSource := &source.SqlSource{}
-	sqlSource.SetSource(adaptedRf)
-
-	log.C(ctx).Infof("source is %s", sqlSource.GetSource())
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
 	paginationInfo, err := s.lRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
@@ -234,10 +230,7 @@ func (s *service) GetCollaborators(ctx context.Context, listId string, f filters
 		return nil, err
 	}
 
-	adaptedRf := s.rfAdapter.AdaptResourceIdentifier(rf)
-	sqlSource := &source.SqlSource{}
-	sqlSource.SetSource(adaptedRf)
-
+	sqlSource := prepareSqlSource(s.rfAdapter, rf)
 	paginationInfo, err := s.lRepo.GetPaginationInfo(ctx, f, sqlSource)
 	if err != nil {
 		log.C(ctx).Errorf("failed to get first and last ids of lists, error %s", err.Error())
@@ -269,4 +262,12 @@ func (s *service) GetListOwnerRecord(ctx context.Context, listId string) (*model
 	}
 
 	return s.uConverter.ToModel(entityOwner), nil
+}
+
+func prepareSqlSource(adapter resourceIdentifierAdapter, rf resource_identifier.ResourceIdentifier) source.Source {
+	adaptedRf := adapter.AdaptResourceIdentifier(rf)
+	sqlSource := &source.SqlSource{}
+	sqlSource.SetSource(adaptedRf)
+
+	return sqlSource
 }
